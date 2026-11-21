@@ -21,4 +21,11 @@
 {"boia":"creus","t":1795269600,"hs":0.28,"dir":92,"tp":3.2,"sst":17.3,"m":{"main":0.42,"ecmwf":0.3,"gfs":0.2,"dwd":0.24},"msst":17.6,"m24":null}
 {"boia":"tordera","t":1795269600,"hs":0.43,"dir":168,"tp":2.3,"sst":17.7,"m":{"main":0.32,"ecmwf":0.34,"gfs":0.38,"dwd":0.34},"msst":17.7,"m24":null}
 {"boia":"begur","t":1795273200,"hs":0.82,"dir":206,"tp":4.1,"sst":17.1,"m":{"main":0.76,"ecmwf":0.78,"gfs":0.7,"dwd":0.72},"msst":17.1,"m24":null}
+{"boia":"creus","t":1795273200,"hs":0.39,"dir":126,"tp":2.8,"sst":17.3,"m":{"main":0.52,"ecmwf":0.36,"gfs":0.32,"dwd":0.6},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795273200,"hs":0.5,"dir":186,"tp":2.3,"sst":17.7,"m":{"main":0.32,"ecmwf":0.38,"gfs":0.56,"dwd":0.4},"msst":17.7,"m24":null}
+{"boia":"creus","t":1795276800,"hs":0.67,"dir":145,"tp":2.6,"sst":17.2,"m":{"main":0.58,"ecmwf":0.58,"gfs":0.48,"dwd":0.98},"msst":17.5,"m24":null}
+{"boia":"tordera","t":1795276800,"hs":0.43,"dir":173,"tp":2.3,"sst":17.7,"m":{"main":0.4,"ecmwf":0.48,"gfs":0.78,"dwd":0.46},"msst":17.7,"m24":null}
 {"boia":"begur","t":1795280400,"hs":0.82,"dir":191,"tp":3.9,"sst":16.7,"m":{"main":0.88,"ecmwf":0.94,"gfs":0.98,"dwd":0.98},"msst":17.1,"m24":null}
+{"boia":"creus","t":1795280400,"hs":0.81,"dir":164,"tp":2.6,"sst":17.2,"m":{"main":0.66,"ecmwf":0.62,"gfs":0.52,"dwd":1.14},"msst":17.5,"m24":null}
+{"boia":"tordera","t":1795280400,"hs":0.49,"dir":188,"tp":2.3,"sst":17.6,"m":{"main":0.5,"ecmwf":0.6,"gfs":0.94,"dwd":0.56},"msst":17.7,"m24":null}
+{"boia":"begur","t":1795287600,"hs":0.94,"dir":198,"tp":4.1,"sst":16.9,"m":{"main":0.96,"ecmwf":0.98,"gfs":1.22,"dwd":1.12},"msst":17.1,"m24":null}
