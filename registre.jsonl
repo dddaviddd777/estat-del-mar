@@ -1,0 +1,14 @@
+{"boia":"creus","t":1795233600,"hs":0.36,"dir":67,"tp":2.9,"sst":17.2,"m":{"main":0.3,"ecmwf":0.24,"gfs":0.18,"dwd":0.2},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795233600,"hs":0.5,"dir":179,"tp":2.8,"sst":17.5,"m":{"main":0.4,"ecmwf":0.5,"gfs":0.42,"dwd":0.36},"msst":17.6,"m24":null}
+{"boia":"creus","t":1795237200,"hs":0.35,"dir":71,"tp":2.9,"sst":17.2,"m":{"main":0.3,"ecmwf":0.22,"gfs":0.16,"dwd":0.2},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795237200,"hs":0.5,"dir":175,"tp":2.8,"sst":17.5,"m":{"main":0.38,"ecmwf":0.48,"gfs":0.4,"dwd":0.34},"msst":17.6,"m24":null}
+{"boia":"creus","t":1795240800,"hs":0.35,"dir":72,"tp":2.9,"sst":17.3,"m":{"main":0.28,"ecmwf":0.14,"gfs":0.16,"dwd":0.18},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795240800,"hs":0.45,"dir":174,"tp":3.2,"sst":17.5,"m":{"main":0.36,"ecmwf":0.42,"gfs":0.38,"dwd":0.32},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795244400,"hs":0.47,"dir":174,"tp":2.9,"sst":17.6,"m":{"main":0.34,"ecmwf":0.4,"gfs":0.34,"dwd":0.3},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795248000,"hs":0.45,"dir":171,"tp":3.1,"sst":17.6,"m":{"main":0.34,"ecmwf":0.38,"gfs":0.32,"dwd":0.3},"msst":17.6,"m24":null}
+{"boia":"creus","t":1795251600,"hs":0.28,"dir":94,"tp":3,"sst":17.2,"m":{"main":0.24,"ecmwf":0.14,"gfs":0.14,"dwd":0.14},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795251600,"hs":0.47,"dir":165,"tp":3.5,"sst":17.6,"m":{"main":0.32,"ecmwf":0.36,"gfs":0.32,"dwd":0.28},"msst":17.6,"m24":null}
+{"boia":"creus","t":1795255200,"hs":0.27,"dir":100,"tp":3.1,"sst":17.2,"m":{"main":0.24,"ecmwf":0.16,"gfs":0.14,"dwd":0.14},"msst":17.6,"m24":null}
+{"boia":"tordera","t":1795255200,"hs":0.42,"dir":166,"tp":3.4,"sst":17.6,"m":{"main":0.3,"ecmwf":0.34,"gfs":0.34,"dwd":0.28},"msst":17.7,"m24":null}
+{"boia":"begur","t":1795258800,"hs":0.59,"dir":201,"tp":5.5,"sst":17.2,"m":{"main":0.54,"ecmwf":0.64,"gfs":0.42,"dwd":0.62},"msst":17,"m24":null}
+{"boia":"tordera","t":1795258800,"hs":0.38,"dir":160,"tp":3.2,"sst":17.6,"m":{"main":0.28,"ecmwf":0.36,"gfs":0.36,"dwd":0.3},"msst":17.7,"m24":null}

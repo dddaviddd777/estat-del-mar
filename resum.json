@@ -1,0 +1,154 @@
+{
+ "actualitzat": "2026-11-21T12:02:20.050Z",
+ "des_de": "2026-11-21T04:00:00.000Z",
+ "fins": "2027-01-31",
+ "total": {
+  "n": 14,
+  "models": {
+   "main": {
+    "n": 14,
+    "bias": -0.087,
+    "mae": 0.087
+   },
+   "ecmwf": {
+    "n": 14,
+    "bias": -0.076,
+    "mae": 0.083
+   },
+   "gfs": {
+    "n": 14,
+    "bias": -0.126,
+    "mae": 0.126
+   },
+   "dwd": {
+    "n": 14,
+    "bias": -0.134,
+    "mae": 0.139
+   }
+  },
+  "ahead24": {
+   "main": null,
+   "ecmwf": null,
+   "gfs": null,
+   "dwd": null
+  },
+  "sst": {
+   "n": 14,
+   "bias": 0.157,
+   "mae": 0.186
+  }
+ },
+ "boies": {
+  "begur": {
+   "nom": "Cap de Begur",
+   "n": 1,
+   "models": {
+    "main": {
+     "n": 1,
+     "bias": -0.05,
+     "mae": 0.05
+    },
+    "ecmwf": {
+     "n": 1,
+     "bias": 0.05,
+     "mae": 0.05
+    },
+    "gfs": {
+     "n": 1,
+     "bias": -0.17,
+     "mae": 0.17
+    },
+    "dwd": {
+     "n": 1,
+     "bias": 0.03,
+     "mae": 0.03
+    }
+   },
+   "ahead24": {
+    "main": null,
+    "ecmwf": null,
+    "gfs": null,
+    "dwd": null
+   },
+   "sst": {
+    "n": 1,
+    "bias": -0.2,
+    "mae": 0.2
+   }
+  },
+  "creus": {
+   "nom": "Cap de Creus",
+   "n": 5,
+   "models": {
+    "main": {
+     "n": 5,
+     "bias": -0.05,
+     "mae": 0.05
+    },
+    "ecmwf": {
+     "n": 5,
+     "bias": -0.142,
+     "mae": 0.142
+    },
+    "gfs": {
+     "n": 5,
+     "bias": -0.166,
+     "mae": 0.166
+    },
+    "dwd": {
+     "n": 5,
+     "bias": -0.15,
+     "mae": 0.15
+    }
+   },
+   "ahead24": {
+    "main": null,
+    "ecmwf": null,
+    "gfs": null,
+    "dwd": null
+   },
+   "sst": {
+    "n": 5,
+    "bias": 0.38,
+    "mae": 0.38
+   }
+  },
+  "tordera": {
+   "nom": "Tordera",
+   "n": 8,
+   "models": {
+    "main": {
+     "n": 8,
+     "bias": -0.115,
+     "mae": 0.115
+    },
+    "ecmwf": {
+     "n": 8,
+     "bias": -0.05,
+     "mae": 0.05
+    },
+    "gfs": {
+     "n": 8,
+     "bias": -0.095,
+     "mae": 0.095
+    },
+    "dwd": {
+     "n": 8,
+     "bias": -0.145,
+     "mae": 0.145
+    }
+   },
+   "ahead24": {
+    "main": null,
+    "ecmwf": null,
+    "gfs": null,
+    "dwd": null
+   },
+   "sst": {
+    "n": 8,
+    "bias": 0.063,
+    "mae": 0.063
+   }
+  }
+ }
+}
