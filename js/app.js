@@ -1,7 +1,7 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE } from './marine.js';
 import * as store from './store.js';
-import { BUOY, fetchBuoy, cachedBuoy, modelBias } from './buoy.js';
+import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib } from './buoy.js';
 
 const $ = (id) => document.getElementById(id);
 const nf1 = new Intl.NumberFormat('ca', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -36,8 +36,11 @@ function ago(ms) {
 // La boia va a part: si falla, la resta de l'app funciona igual.
 let buoy = cachedBuoy();
 let buoyErr = null;
+let calib = cachedCalib();
 async function loadBuoy(force = false) {
-  try { buoy = await fetchBuoy({ force }); buoyErr = null; } catch (e) { buoyErr = e.message; }
+  const [b, c] = await Promise.allSettled([fetchBuoy({ force }), fetchCalib({ force })]);
+  if (b.status === 'fulfilled') { buoy = b.value; buoyErr = null; } else buoyErr = b.reason?.message;
+  if (c.status === 'fulfilled') calib = c.value;
   renderBuoy();
   if (selected) renderDetail();
 }
@@ -296,12 +299,39 @@ function toggleFav(id) {
 const signed = (v) => (v > 0.005 ? '+' : v < -0.005 ? '−' : '±') + nf2.format(Math.abs(v));
 const nf2 = new Intl.NumberFormat('ca', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Resum del calibratge automàtic (boies + models cada hora, a GitHub): quin model l'encerta més de mitjana.
+const MODEL_NAMES = { main: ['Météo-France', "el de l'app"], ecmwf: ['ECMWF', 'mapa del Windy'], gfs: ['GFS Wave', 'EUA'], dwd: ['DWD EWAM', 'Alemanya'] };
+function calibBlock() {
+  const R = calib?.resum;
+  if (!R?.total) return '';
+  const T = R.total;
+  const since = R.des_de ? fmt({ day: 'numeric', month: 'numeric' }).format(Date.parse(R.des_de)) : '';
+  const head = `<div class="by-h">Calibratge automàtic · des del ${since}</div>`;
+  if (T.n < 6) return `${head}<p class="by-note">Acaba de començar: cada hora es comparen 3 boies (Cap de Begur, Cap de Creus i Tordera) amb els models. D'aquí a uns dies es veurà quin l'encerta més.</p>`;
+  const ids = Object.keys(MODEL_NAMES).filter((id) => T.models[id]);
+  const best = ids.reduce((a, id) => (T.models[id].mae < T.models[a].mae ? id : a), ids[0]);
+  const a24 = T.ahead24 || {};
+  const n24 = Math.max(0, ...ids.map((id) => a24[id]?.n ?? 0));
+  const tend = (b) => (Math.abs(b) < 0.03 ? 'just' : b > 0 ? 'dona de més' : 'dona de menys');
+  const rows = ids.map((id) => {
+    const s = T.models[id], s24 = a24[id];
+    return `<li class="${id === best ? 'best' : ''}">
+      <span>${MODEL_NAMES[id][0]}<small>${MODEL_NAMES[id][1]}</small></span>
+      <em>±${nf2.format(s.mae)} m</em>
+      <i>${tend(s.bias)}${n24 >= 6 && s24 ? ` · 24 h abans ±${nf2.format(s24.mae)}` : ''}${id === best ? ' · el millor' : ''}</i>
+    </li>`;
+  }).join('');
+  const sst = T.sst && T.sst.n >= 6 ? ` L'aigua del model, de mitjana, ${Math.abs(T.sst.bias) < 0.2 ? 'clava la de les boies' : `marca ${nf1.format(Math.abs(T.sst.bias))} °C ${T.sst.bias > 0 ? 'de més' : 'de menys'}`}.` : '';
+  return `${head}<ul class="by-models">${rows}</ul>
+    <p class="by-note">Error mitjà de l'onada en ${T.n} comparacions de 3 boies (Cap de Begur, Cap de Creus i Tordera) amb el que deia cada model per a aquella hora${n24 >= 6 ? `, i amb la previsió feta 24 h abans (${n24})` : ''}.${sst} Temporal, fins al ${fmt({ day: 'numeric', month: 'numeric', year: 'numeric' }).format(Date.parse(R.fins))}.</p>`;
+}
+
 function renderBuoy() {
   const el = $('buoyCard');
   if (!el) return; // index.html antic encara a la memòria del navegador
   if (!buoy?.reading) {
     el.hidden = !buoyErr;
-    if (buoyErr) el.innerHTML = `<h2>Boia del ${BUOY.name}</h2><p class="by-note">No s'ha pogut llegir la boia: ${buoyErr}</p>`;
+    if (buoyErr) el.innerHTML = `<h2>Boia del ${BUOY.name}</h2><p class="by-note">No s'ha pogut llegir la boia: ${buoyErr}</p>${calibBlock()}`;
     return;
   }
   el.hidden = false;
@@ -321,15 +351,8 @@ function renderBuoy() {
         <em>${nf2.format(x.hs)} m</em>
         <i>${signed(x.hs - r.hs)} m${x === best ? ' · més encertat' : ''}</i>
       </li>`).join('')}</ul>`;
-    const bias = modelBias();
-    const n = Math.max(0, ...Object.values(bias).map((o) => o.n));
-    if (n >= 6) {
-      models += `<p class="by-note">Mitjana de les ${n} hores que s'han comparat en aquest mòbil: ${ms.filter((x) => bias[x.id])
-        .map((x) => `${x.name} ${signed(bias[x.id].bias)} m`).join(' · ')}. Positiu vol dir que el model dona més onada que la real.</p>`;
-    } else {
-      models += `<p class="by-note">Cada hora que obris l'app es guarda aquesta comparació al mòbil; d'aquí a uns dies veurem quin model l'encerta més de mitjana.</p>`;
-    }
   }
+  models += calibBlock();
 
   el.innerHTML = `
     <h2>Boia ${BUOY.name} <span>mesurat, ${BUOY.km} km mar endins</span></h2>

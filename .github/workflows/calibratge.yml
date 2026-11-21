@@ -1,0 +1,45 @@
+# Calibratge temporal: cada hora desa què mesuren les boies i què deien els models a la branca `calibratge`.
+# Per aturar-lo: GitHub → Actions → Calibratge → "Disable workflow" (o esborrar aquest fitxer).
+# També s'atura sol a partir de la data FINS de tools/calibra.js.
+name: Calibratge
+
+on:
+  schedule:
+    - cron: '17 * * * *' # cada hora, als 17 minuts (GitHub pot endarrerir-ho una mica)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: calibratge
+  cancel-in-progress: false
+
+jobs:
+  registre:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Codi de l'app
+        uses: actions/checkout@v4
+        with:
+          path: app
+      - name: Branca de dades
+        uses: actions/checkout@v4
+        with:
+          ref: calibratge
+          path: dades
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Registra boies i models
+        run: node app/tools/calibra.js dades
+      - name: Desa
+        working-directory: dades
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "Res de nou"; exit 0; fi
+          git commit -q -m "Registre $(date -u +'%Y-%m-%d %H:%M') UTC"
+          git push

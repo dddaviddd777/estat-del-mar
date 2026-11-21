@@ -8,7 +8,6 @@ export const BUOY = { id: 2798, name: 'Cap de Begur', lat: 41.9016, lon: 3.6568,
 // API interna del web Portus (no documentada, CORS obert). Les hores són UTC.
 const URL_LAST = `https://portus.puertos.es/portussvr/api/lastData/station/${BUOY.id}?locale=es`;
 const TTL = 20 * 60 * 1000; // la boia dona una dada cada hora
-const LOG_MAX = 1000;       // hores de comparació boia-models desades al mòbil
 
 // Models que comparem a la boia: el principal de l'app i els altres.
 const MODELS = [{ id: 'main', api: 'meteofrance_wave', name: 'Météo-France', note: "el de l'app" }, ...WAVE_MODELS];
@@ -34,7 +33,6 @@ export async function fetchBuoy({ force = false } = {}) {
   const models = await modelsAt(t).catch(() => (c?.reading?.t === t ? c.models : null));
   const data = { fetchedAt: Date.now(), reading, models };
   store.set('buoy', data);
-  logComparison(reading, models);
   return data;
 }
 
@@ -50,24 +48,25 @@ async function modelsAt(t) {
     .filter((x) => x.hs != null);
 }
 
-/** Desa cada hora mesurada amb el que deien els models: servirà per calibrar (quin model l'encerta més aquí). */
-function logComparison(reading, models) {
-  if (reading.hs == null || !models?.length) return;
-  const log = store.get('buoyLog', []);
-  if (log.some((e) => e.t === reading.t)) return;
-  log.push({ t: reading.t, hs: reading.hs, dir: reading.dir, tp: reading.tp, sst: reading.sst, m: Object.fromEntries(models.map((x) => [x.id, x.hs])) });
-  store.set('buoyLog', log.slice(-LOG_MAX));
+// ---------- Calibratge compartit ----------
+// Una GitHub Action desa cada hora boies (Cap de Begur, Cap de Creus, Tordera) + models a la branca `calibratge`
+// i en fa un resum (tools/calibra.js). Tothom el llegeix d'aquí: no depèn de qui obri l'app.
+const URL_CALIB = 'https://raw.githubusercontent.com/dddaviddd777/estat-del-mar/calibratge/resum.json';
+const CALIB_TTL = 60 * 60 * 1000;
+
+export function cachedCalib() {
+  return store.get('calib', null);
 }
 
-/** Error mitjà de cada model respecte de la boia amb les hores desades (m, positiu = el model dona de més). */
-export function modelBias() {
-  const log = store.get('buoyLog', []);
-  const out = {};
-  for (const e of log) for (const [id, v] of Object.entries(e.m)) {
-    if (v == null) continue;
-    (out[id] ||= { n: 0, sum: 0, abs: 0 });
-    out[id].n++; out[id].sum += v - e.hs; out[id].abs += Math.abs(v - e.hs);
-  }
-  for (const o of Object.values(out)) { o.bias = o.sum / o.n; o.mae = o.abs / o.n; }
-  return out;
+export async function fetchCalib({ force = false } = {}) {
+  const c = cachedCalib();
+  if (!force && c && Date.now() - c.fetchedAt < CALIB_TTL) return c;
+  const r = await fetch(URL_CALIB, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`GitHub ha respost ${r.status}`);
+  const data = { fetchedAt: Date.now(), resum: await r.json() };
+  store.set('calib', data);
+  return data;
 }
+
+// El registre que abans es desava al mòbil ara el fa GitHub per a tothom: l'esborrem.
+if (store.get('buoyLog')) store.set('buoyLog', undefined);

@@ -1,6 +1,6 @@
 // Service worker: permet obrir l'app sense connexió.
 // Les dades del mar NO es guarden aquí (les desa l'app amb la seva hora), només els fitxers de l'app.
-const VERSION = 'mar-v4';
+const VERSION = 'mar-v5';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'css/mar.css', 'manifest.webmanifest',
   'js/app.js', 'js/marine.js', 'js/store.js', 'js/buoy.js',
@@ -8,7 +8,7 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
