@@ -110,3 +110,22 @@ Mapa: Leaflet amb el mapa d'OpenStreetMap, sense clau.
 - La **llista de platges** on nedeu (afegir-ne o treure'n de la taula).
 - Quan considereu que el mar **està bé** i quan **no** (per ajustar el semàfor).
 - La **franja horària** habitual (p. ex. de 7 a 10 h).
+
+---
+
+## 7. Boies reals: què hi ha i com llegir-les (estudiat el 21/11/2026)
+
+| Boia | Qui | On | Estat | Dades | Accés des del mòbil |
+|---|---|---|---|---|---|
+| **Cap de Begur** (2798) | Puertos del Estado, xarxa exterior | 41,90 N 3,66 E, ~35 km mar endins | ✅ En marxa, dada cada hora | Onada (Hm0, Hmax, període, direcció), vent, temperatura de l'aigua i de l'aire, corrent, salinitat | ✅ Directe: `POST https://portus.puertos.es/portussvr/api/lastData/station/2798?locale=es` amb el cos `["WAVE","WIND","WATER_TEMP"]` (CORS obert). No és una API documentada: la fa servir el web de Portus i podria canviar. `valor / factor` = valor real. |
+| **Palamós** (1718) | Puertos del Estado, xarxa costanera | 41,83 N 3,19 E | ❌ Sense dades (fora de servei; només històric) | — | — |
+| **Cap de Creus** | ICATMAR (CSIC + Generalitat) | 42,32 N 3,35 E | ✅ En marxa, cada 20 min | Onada, vent, temperatura de l'aigua, corrent | 🟡 ERDDAP públic (`hebe.icm.csic.es/erddap`), però el servidor **rebutja les peticions del navegador** (403 si porten `Origin`): cal un intermediari (Cloudflare Worker o GitHub Action) |
+| **Tordera** (davant de Blanes/Malgrat) | ICATMAR | 41,60 N 2,77 E | ✅ En marxa, cada 20 min | Igual que Cap de Creus | 🟡 Igual: cal intermediari |
+| **Montgó, Medes, Sud i Nord Cap de Creus** | ICATMAR | Davant de l'Escala i les Medes | ⏸ Última dada el 21/10/2026 (semblen d'estiu) | Onada, meteo, CTD, corrents | 🟡 Cal intermediari |
+
+**Primera comparació** (21/11/2026, 12 h, Cap de Begur): la boia mesurava **0,59 m del 201°, Tp 5,5 s, aigua 17,2 °C**. Els models al mateix punt donaven: Météo-France 0,54 m (el que fa servir l'app), ECMWF 0,74 m (el del Windy), GFS 0,42 m. L'aigua a la boia de la Tordera era a 17,6 °C, igual que el model a Lloret. Només és una lectura, però va bé per començar.
+
+**Per a què serveixen:**
+1. **Saber com és el mar ara**, no només la previsió: "Mesurat ara al Cap de Begur: 0,6 m del SO".
+2. **Calibrar**: si guardem cada hora el que diu la boia i el que deien els models, en unes setmanes sabrem quin model l'encerta més aquí i si cal corregir l'onada (p. ex. "l'ECMWF dona un 25 % de més"). Per guardar-ho sense dependre del mòbil cal un procés automàtic (GitHub Action cada hora que desa un JSON al repo, gratuït en un repo públic).
+3. **Límit**: les boies són mar endins (Begur a 35 km). Diuen com entra el mar a la costa, no com és la vora de cada platja. Per a la platja, el que compta és el diari de nedades.

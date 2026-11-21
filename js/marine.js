@@ -44,11 +44,22 @@ const MARINE = ['wave_height', 'wave_direction', 'wave_period', 'wind_wave_heigh
   'swell_wave_height', 'swell_wave_direction', 'swell_wave_period', 'sea_surface_temperature'];
 const WIND = ['wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'weather_code', 'temperature_2m'];
 
+/**
+ * Altres models d'onades, per contrastar-los amb el principal (best_match, ~Météo-France).
+ * ECMWF WAM és el que el Windy ensenya per defecte a la capa d'onades.
+ */
+export const WAVE_MODELS = [
+  { id: 'ecmwf', api: 'ecmwf_wam', name: 'ECMWF', note: 'mapa del Windy' },
+  { id: 'gfs', api: 'ncep_gfswave025', name: 'GFS Wave', note: 'EUA · també al Windy' },
+  { id: 'dwd', api: 'dwd_ewam', name: 'DWD EWAM', note: 'Alemanya · més fi' },
+];
+const DATA_VERSION = 2; // apujar-ho si canvia el format de les dades desades
+
 // ---------- Descàrrega ----------
 export function cachedMarine() {
   const c = store.get('marine', null);
-  // Si la llista de platges ha canviat, les dades desades no serveixen.
-  return c && BEACHES.every((b) => c.beaches?.[b.id]) ? c : null;
+  // Si la llista de platges o el format han canviat, les dades desades no serveixen.
+  return c && c.v === DATA_VERSION && BEACHES.every((b) => c.beaches?.[b.id]) ? c : null;
 }
 
 export async function fetchMarine({ force = false } = {}) {
@@ -56,15 +67,17 @@ export async function fetchMarine({ force = false } = {}) {
   if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
   const lat = BEACHES.map((b) => b.lat).join(','), lon = BEACHES.map((b) => b.lon).join(',');
   const common = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=4&cell_selection=sea`;
-  const [m, w] = await Promise.all([
+  const [m, w, x] = await Promise.all([
     getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=${MARINE.join(',')}`),
     getJson(`https://api.open-meteo.com/v1/forecast?${common}&wind_speed_unit=kmh&hourly=${WIND.join(',')}`),
+    // El contrast de models és opcional: si falla, l'app funciona igual.
+    getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=wave_height,wave_direction&models=${WAVE_MODELS.map((o) => o.api).join(',')}`).catch(() => null),
   ]);
-  const ma = [].concat(m), wa = [].concat(w);
+  const ma = [].concat(m), wa = [].concat(w), xa = x ? [].concat(x) : null;
   const times = ma[0].hourly.time;
   const beaches = {};
   BEACHES.forEach((b, i) => {
-    const M = ma[i].hourly, W = wa[i].hourly;
+    const M = ma[i].hourly, W = wa[i].hourly, X = xa?.[i]?.hourly;
     beaches[b.id] = times.map((t, k) => ({
       t,
       hs: M.wave_height[k], dir: M.wave_direction[k], per: M.wave_period[k],
@@ -73,9 +86,10 @@ export async function fetchMarine({ force = false } = {}) {
       sst: M.sea_surface_temperature[k],
       wind: W.wind_speed_10m[k], windDir: W.wind_direction_10m[k], gust: W.wind_gusts_10m[k],
       code: W.weather_code[k], air: W.temperature_2m[k],
+      mod: X ? Object.fromEntries(WAVE_MODELS.map((o) => [o.id, [X[`wave_height_${o.api}`]?.[k] ?? null, X[`wave_direction_${o.api}`]?.[k] ?? null]])) : null,
     }));
   });
-  const data = { fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches };
+  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches };
   store.set('marine', data);
   return data;
 }
@@ -236,4 +250,58 @@ export function nearestHour(hours) {
 function avg(xs) {
   const v = xs.filter((x) => x != null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+
+// ---------- Contrast de models ----------
+/**
+ * Onada de cada model en una hora: mar obert i estimada a la platja (amb la mateixa correcció d'orientació).
+ * El primer és el principal de l'app. `spread`: diferència entre el que més i el que menys dona a la platja.
+ */
+export function modelCompare(beach, h) {
+  const rows = [{ id: 'main', name: 'Météo-France', note: "el de l'app", hs: h.hs, dir: h.dir, beach: beachWave(beach, h) }];
+  for (const o of WAVE_MODELS) {
+    const [hs, dir] = h.mod?.[o.id] ?? [null, null];
+    if (hs == null) continue;
+    rows.push({ id: o.id, name: o.name, note: o.note, hs, dir, beach: hs * exposure(beach, dir) });
+  }
+  const v = rows.map((r) => r.beach).filter((x) => x != null);
+  return { rows, spread: v.length > 1 ? Math.max(...v) - Math.min(...v) : 0 };
+}
+
+/** Enllaç al Windy en aquest punt amb la capa d'onades (obre la previsió del punt). */
+export function windyUrl(beach) {
+  const [la, lo] = seaPoint(beach).map((v) => v.toFixed(3));
+  return `https://www.windy.com/${la}/${lo}?waves,${la},${lo},12`;
+}
+
+// ---------- Temperatura de l'aigua ----------
+/** Escala de color per a la temperatura de l'aigua (°C), de blau fred a taronja càlid. */
+const SST_STOPS = [[12, [74, 123, 209]], [15, [79, 179, 217]], [18, [92, 201, 167]], [21, [245, 197, 66]], [24, [240, 138, 75]], [27, [226, 79, 79]]];
+export const SST_RANGE = [SST_STOPS[0][0], SST_STOPS.at(-1)[0]];
+export function sstColor(t) {
+  if (t == null) return '#9aa9b5';
+  const s = SST_STOPS;
+  if (t <= s[0][0]) return `rgb(${s[0][1]})`;
+  for (let i = 1; i < s.length; i++) {
+    if (t <= s[i][0]) {
+      const f = (t - s[i - 1][0]) / (s[i][0] - s[i - 1][0]);
+      return `rgb(${s[i][1].map((v, j) => Math.round(s[i - 1][1][j] + (v - s[i - 1][1][j]) * f))})`;
+    }
+  }
+  return `rgb(${s.at(-1)[1]})`;
+}
+export const sstGradient = () => `linear-gradient(90deg, ${SST_STOPS.map(([t]) => sstColor(t)).join(', ')})`;
+
+/** Com la notarà un nedador. */
+export function sstWord(t) {
+  if (t == null) return '';
+  return t < 14 ? 'molt freda' : t < 17 ? 'freda' : t < 20 ? 'fresca' : t < 23 ? 'agradable' : 'càlida';
+}
+
+/** Temperatura de l'aigua a tota la costa en una hora: mitjana, i la platja més freda i la més calenta. */
+export function sstStats(data, k) {
+  const v = BEACHES.map((b) => ({ b, t: data.beaches[b.id][k]?.sst })).filter((x) => x.t != null);
+  if (!v.length) return null;
+  const min = v.reduce((a, x) => (x.t < a.t ? x : a)), max = v.reduce((a, x) => (x.t > a.t ? x : a));
+  return { avg: v.reduce((a, x) => a + x.t, 0) / v.length, min, max };
 }

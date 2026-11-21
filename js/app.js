@@ -1,4 +1,5 @@
-import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName } from './marine.js';
+import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE } from './marine.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -114,6 +115,16 @@ function initMap() {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   L.control.zoom({ position: 'topleft' }).addTo(map);
+  // Temperatura de l'aigua de tota la costa, a dalt a l'esquerra (és terra: no tapa cap etiqueta).
+  const Sst = L.Control.extend({
+    onAdd() {
+      const el = L.DomUtil.create('div', 'sst-box');
+      el.id = 'sstBox';
+      L.DomEvent.disableClickPropagation(el);
+      return el;
+    },
+  });
+  new Sst({ position: 'topleft' }).addTo(map);
   const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))), { padding: [24, 24], paddingBottomRight: [90, 24] });
   fitCoast();
   // Si el mapa s'ha creat quan encara no tenia mida (pantalla amagada), l'ajustem quan en tingui.
@@ -189,8 +200,29 @@ function layoutLabels() {
   return Object.fromEntries(all.map((a) => [a.id, { dx: a.x - a.p.x, dy: a.y - a.p.y }]));
 }
 
+function renderSst() {
+  const el = $('sstBox');
+  if (!el || !data) return;
+  const s = sstStats(data, idx);
+  if (!s) { el.hidden = true; return; }
+  el.hidden = false;
+  const pos = (t) => Math.max(0, Math.min(100, ((t - SST_RANGE[0]) / (SST_RANGE[1] - SST_RANGE[0])) * 100));
+  const same = Math.abs(s.max.t - s.min.t) < 0.25;
+  el.style.setProperty('--sst', sstColor(s.avg));
+  el.innerHTML = `
+    <div class="sst-top">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5V5a2 2 0 1 1 4 0v8.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17" r="1.8"/></svg>
+      <b>${nf1.format(s.avg)}<small>°C</small></b>
+    </div>
+    <span class="sst-word">Aigua ${sstWord(s.avg)}</span>
+    <i class="sst-bar" style="background:${sstGradient()}"><em style="left:${pos(s.avg)}%"></em></i>
+    <span class="sst-range">${same ? 'Igual a tota la costa' : `Mín. ${nf1.format(s.min.t)} ${s.min.b.short}<br>Màx. ${nf1.format(s.max.t)} ${s.max.b.short}`}</span>`;
+  el.title = `Temperatura de l'aigua (mitjana de les platges) ${dayLabel(data.times[idx]).toLowerCase()} a les ${hhmm(data.times[idx])}`;
+}
+
 function renderMarkers() {
   if (!map || !data) return;
+  renderSst();
   const off = layoutLabels();
   for (const b of BEACHES) {
     const h = data.beaches[b.id][idx];
@@ -291,7 +323,7 @@ function renderDetail() {
     ['Mar de fons', h.sw == null ? '—' : `${m(h.sw)} m del ${windName(swDir)}${h.swPer ? `, ${Math.round(h.swPer)} s` : ''}`],
     ['Mar de vent', h.ww == null ? '—' : `${m(h.ww)} m del ${windName(h.wwDir)}`],
     ['Vent', h.wind == null ? '—' : `${Math.round(h.wind)} km/h del ${windName(h.windDir)} (${REL[a.rel]}) · ratxes ${Math.round(h.gust ?? 0)}`],
-    ['Aigua', h.sst == null ? '—' : `${nf1.format(h.sst)} °C`],
+    ['Aigua', h.sst == null ? '—' : `<i class="sst-dot" style="background:${sstColor(h.sst)}"></i>${nf1.format(h.sst)} °C, ${sstWord(h.sst)}`],
     ['Aire', h.air == null ? '—' : `${Math.round(h.air)} °C`],
   ];
 
@@ -307,6 +339,7 @@ function renderDetail() {
       <p>Índex de nedada de 0 a 10: combina l'onada a la platja amb el vent i les ratxes. Compta sobretot el pitjor dels dos, i si tots dos fallen alhora baixa encara més. Més de 7 = bo · de 4 a 7 = mogut · 4 o menys = mala mar.</p>
     </div>
     <div class="d-windows">${wins}</div>
+    ${modelsBlock(b, h)}
     <div class="d-h">Pròximes 48 hores</div>
     <div class="d-chart" id="dChart">${chart(b, hours)}</div>
     <div class="d-h">Detall a les ${hhmm(h.t)}</div>
@@ -316,6 +349,32 @@ function renderDetail() {
   const sc = $('dChart');
   const x = (idx - nowIdx) * 34 - sc.clientWidth / 2 + 17;
   sc.scrollLeft = Math.max(0, x);
+}
+
+// Què diuen els altres models d'onades (inclòs el que ensenya el Windy) i enllaç per veure-ho allà mateix.
+function modelsBlock(b, h) {
+  const { rows, spread } = modelCompare(b, h);
+  const max = Math.max(0.5, ...rows.map((r) => r.hs ?? 0));
+  const agree = rows.length < 2 ? ''
+    : spread < 0.2 ? 'Els models coincideixen: previsió fiable.'
+    : spread < 0.5 ? 'Els models difereixen una mica.'
+    : 'Els models no coincideixen: previsió incerta, mira-ho també al Windy.';
+  const lines = rows.map((r) => {
+    const lv = r.beach == null ? null : r.beach < 0.3 ? 0 : r.beach < 0.8 ? 1 : 2;
+    return `<li class="${r.id === 'main' ? 'main' : ''}">
+      <span>${r.name}<small>${r.note}</small></span>
+      <i class="mbar"><b style="width:${((r.hs ?? 0) / max) * 100}%"></b><b class="in" style="width:${((r.beach ?? 0) / max) * 100}%;background:${lv == null ? '#9aa9b5' : LEVELS[lv].color}"></b></i>
+      <em>${m(r.beach)} m<small>${m(r.hs)} ${windName(r.dir)}</small></em>
+    </li>`;
+  }).join('');
+  return `<div class="d-models">
+    <div class="d-h" style="margin-top:0">Què diuen els models · ${hh(h.t)} h</div>
+    ${rows.length > 1 ? `<ul>${lines}</ul><p>${agree} Xifra gran: onada a la platja; petita: mar obert i d'on ve.</p>` : '<p>No s\'han pogut carregar els altres models.</p>'}
+    <a class="windy-btn" href="${windyUrl(b)}" target="_blank" rel="noopener">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+      Obre al Windy
+    </a>
+  </div>`;
 }
 
 function scoreBar(label, v) {
