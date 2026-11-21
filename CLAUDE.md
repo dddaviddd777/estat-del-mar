@@ -43,7 +43,10 @@ Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, 
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).
 
 ## Pendent (proposat, no fet)
-1. ~~Botó "Obre al Windy"~~ i ~~boia del Cap de Begur~~ fets el 21/11/2026 (`js/buoy.js`: lectura, comparació amb els models al mateix punt i registre `buoyLog` al mòbil, només quan s'obre l'app). Proposat: guardar cada hora boia + models amb una GitHub Action per calibrar sense dependre del mòbil.
+1. ~~Botó "Obre al Windy"~~, ~~boia del Cap de Begur~~ i ~~calibratge automàtic~~ fets el 21/11/2026.
+   - `js/buoy.js`: lectura en directe de la boia de Begur i comparació amb els models al mateix punt.
+   - Calibratge **temporal** (fins al 31/1/2027, `FINS` a `tools/calibra.js`): `.github/workflows/calibratge.yml` corre cada hora `tools/calibra.js`, que compara Cap de Begur, Cap de Creus i Tordera amb els 4 models (a l'hora i amb la previsió de 24 h abans) i desa `registre.jsonl` + `resum.json` a la branca **`calibratge`** (no a `main`, per no omplir-lo de commits). L'app llegeix `resum.json` de raw.githubusercontent.com.
+   - Quan hi hagi prou dades (2-3 setmanes): decidir si canviem de model principal o hi apliquem una correcció, i aturar el workflow.
 2. Diari de nedades: platja, hora, com estava el mar (0-10) i onada observada, guardat al mòbil amb exportació; servirà per calibrar orientacions i pesos amb dades reals.
 3. Calibratge de 2-3 setmanes amb el Windy i el que trobin a l'aigua.
 4. Més endavant: boies reals, Meteocat, avís la nit abans.
