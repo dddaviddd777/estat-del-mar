@@ -1,5 +1,5 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS } from './marine.js';
 import * as store from './store.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib } from './buoy.js';
 
@@ -381,9 +381,54 @@ function openDetail(id) {
 }
 function closeDetail() { $('detail').hidden = true; selected = null; renderMarkers(); }
 
+// Color de cada tipus de mar (taronja/vermell = incòmode, verds = agradable).
+const KIND_COLOR = { plana: '#9be7b4', curta: '#a8dcff', mitjana: '#9be7b4', llarga: '#7fe0c8', picada: '#ffb46b', creuada: '#ff8f8f' };
+
+/** Dibuix del perfil de l'onada: la distància entre crestes surt del període (com més llarg, més espaiades). */
+function waveSketch(sea) {
+  const W = 300, Hh = 46, mid = 24;
+  const lenPx = Math.max(16, Math.min(150, (sea.len ?? 25) * 1.1)); // 1 m ≈ 1,1 px
+  const amp = Math.max(2, Math.min(16, sea.hb * 22));
+  let d = `M0 ${mid}`;
+  for (let x = 2; x <= W; x += 2) {
+    let y = Math.sin((x / lenPx) * 2 * Math.PI);
+    if (sea.kind === 'picada') y = Math.sign(y) * Math.pow(Math.abs(y), 0.6);                       // crestes punxegudes
+    if (sea.kind === 'creuada') y = 0.65 * y + 0.45 * Math.sin((x / (lenPx * 0.62)) * 2 * Math.PI + 1); // dos trens barrejats
+    d += ` L${x} ${(mid - y * amp).toFixed(1)}`;
+  }
+  return `<svg class="sea-sketch" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${d} L${W} ${Hh} L0 ${Hh}z" fill="${KIND_COLOR[sea.kind]}" fill-opacity=".22"/>
+    <path d="${d}" fill="none" stroke="${KIND_COLOR[sea.kind]}" stroke-width="2"/></svg>`;
+}
+
+/** Com és l'onada: tipus, període, distància entre crestes i per on entra a la platja. */
+function seaBlock(b, h, a) {
+  const s = a.sea;
+  if (!s) return '';
+  const K = SEA_KINDS[s.kind];
+  const dom = s.comps[0];
+  const e = dom && dom.off > 0 ? dom.h / dom.off : 1;
+  const entra = e >= 0.9 ? 'entra de ple a la platja' : e >= 0.4 ? 'entra de biaix, una mica reduïda' : 'gairebé no entra: la platja hi queda arrecerada';
+  const src = { vent: 'mar de vent', fons: 'mar de fons', fons2: 'segon mar de fons', total: 'onada' }[s.src] || 'onada';
+  const factor = K.factor === 1 ? '' : ` A l'índex compta com ${m(s.eff)} m.`;
+  return `<div class="d-sea">
+    <div class="d-h" style="margin-top:0">Com és l'onada · ${hh(h.t)} h <button class="info-btn" data-help="periode" aria-label="Què vol dir">i</button></div>
+    <div class="sea-head">
+      <span class="sea-kind" style="--k:${KIND_COLOR[s.kind]}">${K.label}</span>
+      <span>${s.T ? `${nf1.format(s.T)} s entre crestes` : 'període desconegut'}${s.len ? ` · ~${Math.round(s.len)} m d'una a l'altra` : ''}</span>
+    </div>
+    ${s.kind === 'plana' ? '' : waveSketch(s)}
+    <p>${K.tip}${factor}</p>
+    <ul class="sea-dirs">
+      <li><span>Onada</span>${dom ? `${src} del ${windName(dom.dir)} (${Math.round(dom.dir)}°): ${entra}` : '—'}</li>
+      <li><span>Vent</span>${h.wind == null ? '—' : `${Math.round(h.wind)} km/h del ${windName(h.windDir)}, ${REL[a.rel]}${a.rel === 'mar' && h.wind >= 12 ? ': aixeca onada curta a la vora' : a.rel === 'terra' ? ': aplana la vora però t\x27allunya' : ''}`}</li>
+    </ul>
+  </div>`;
+}
+
 function sentence(b, h, a) {
   const parts = [];
-  parts.push(a.beachHs == null ? 'Sense dada d\'onada' : `Onada estimada de ${m(a.beachHs)} m a la platja`);
+  parts.push(a.beachHs == null ? 'Sense dada d\'onada' : `Onada estimada de ${m(a.beachHs)} m a la platja${a.sea && a.sea.kind !== 'plana' ? `, ${SEA_KINDS[a.sea.kind].label.toLowerCase()}` : ''}`);
   if (h.wind != null) parts.push(`vent ${REL[a.rel]} de ${Math.round(h.wind)} km/h${h.gust != null ? ` (ratxes de ${Math.round(h.gust)})` : ''}`);
   return parts.join(', ') + '.';
 }
@@ -411,8 +456,9 @@ function renderDetail() {
   const swDir = h.swDir ?? h.dir;
   const facts = [
     ['Mar obert (model)', `${m(h.hs)} m del ${windName(h.dir)}${h.per ? `, ${Math.round(h.per)} s` : ''}`],
-    ['Mar de fons', h.sw == null ? '—' : `${m(h.sw)} m del ${windName(swDir)}${h.swPer ? `, ${Math.round(h.swPer)} s` : ''}`],
-    ['Mar de vent', h.ww == null ? '—' : `${m(h.ww)} m del ${windName(h.wwDir)}`],
+    ['Mar de fons', h.sw == null ? '—' : `${m(h.sw)} m del ${windName(swDir)}${(h.swTp ?? h.swPer) ? `, ${nf1.format(Math.max(h.swTp ?? 0, h.swPer ?? 0))} s` : ''}`],
+    ...(h.s2 >= 0.05 ? [['2n mar de fons', `${m(h.s2)} m del ${windName(h.s2Dir)}${h.s2Per ? `, ${nf1.format(h.s2Per)} s` : ''}`]] : []),
+    ['Mar de vent', h.ww == null ? '—' : `${m(h.ww)} m del ${windName(h.wwDir)}${(h.wwTp ?? h.wwPer) ? `, ${nf1.format(Math.max(h.wwTp ?? 0, h.wwPer ?? 0))} s` : ''}`],
     ['Vent', h.wind == null ? '—' : `${Math.round(h.wind)} km/h del ${windName(h.windDir)} (${REL[a.rel]}) · ratxes ${Math.round(h.gust ?? 0)}`],
     ['Aigua', h.sst == null ? '—' : `<i class="sst-dot" style="background:${sstColor(h.sst)}"></i>${nf1.format(h.sst)} °C, ${sstWord(h.sst)}`],
     ['Aire', h.air == null ? '—' : `${Math.round(h.air)} °C`],
@@ -429,8 +475,9 @@ function renderDetail() {
     <div class="d-score">
       ${scoreBar('Onada', a.waveScore)}
       ${scoreBar('Vent', a.windScore)}
-      <p>Índex de nedada de 0 a 10: combina l'onada a la platja amb el vent i les ratxes. Compta sobretot el pitjor dels dos, i si tots dos fallen alhora baixa encara més. Més de 7 = bo · de 4 a 7 = mogut · 4 o menys = mala mar.</p>
+      <p>Índex de nedada de 0 a 10: combina l'onada a la platja (segons d'on ve, com d'alta és i el tipus de mar) amb el vent i les ratxes. Compta sobretot el pitjor dels dos, i si tots dos fallen alhora baixa encara més. Més de 7 = bo · de 4 a 7 = mogut · 4 o menys = mala mar. <button class="link-btn" data-help="index">Com es calcula?</button></p>
     </div>
+    ${seaBlock(b, h, a)}
     <div class="d-windows">${wins}</div>
     ${modelsBlock(b, h)}
     <div class="d-h">Pròximes 48 hores</div>
@@ -478,7 +525,7 @@ function scoreBar(label, v) {
 function chart(b, hours) {
   const from = nowIdx, to = Math.min(hours.length, nowIdx + 48);
   const hs = hours.slice(from, to);
-  const W = 34, H = 200, base = 112, maxM = Math.max(1, ...hs.map((h) => h.hs ?? 0));
+  const W = 34, H = 214, base = 112, maxM = Math.max(1, ...hs.map((h) => h.hs ?? 0));
   const sc = (v) => (v / maxM) * 76;
   let out = '';
   hs.forEach((h, i) => {
@@ -494,19 +541,22 @@ function chart(b, hours) {
       out += `<rect x="${cx - 9}" y="${base - sc(a.beachHs)}" width="18" height="${Math.max(sc(a.beachHs), 1)}" rx="3" fill="#a8dcff"/>`;
       out += `<text x="${cx}" y="${base - Math.max(sc(a.beachHs), sc(h.hs ?? 0)) - 5}" fill="#fff" font-size="10.5" text-anchor="middle">${m(a.beachHs)}</text>`;
     }
+    // període (s), pintat segons el tipus de mar
+    if (a.sea?.T && a.sea.kind !== 'plana') out += `<text x="${cx}" y="127" fill="${KIND_COLOR[a.sea.kind]}" font-size="10" font-weight="500" text-anchor="middle">${Math.round(a.sea.T)}s</text>`;
     // vent
     const rot = ((h.windDir ?? 0) + 180) % 360;
     const wc = a.rel === 'mar' ? '#ffb46b' : a.rel === 'terra' ? '#9be7b4' : '#fff';
-    out += `<g transform="rotate(${rot} ${cx} 134)"><path d="M${cx} 125 l6 14 l-6 -4 l-6 4z" fill="${wc}"/></g>`;
-    out += `<text x="${cx}" y="158" fill="#fff" font-size="11" text-anchor="middle">${h.wind == null ? '—' : Math.round(h.wind)}</text>`;
-    out += `<text x="${cx}" y="172" fill="rgba(255,255,255,.5)" font-size="9.5" text-anchor="middle">${h.gust == null ? '' : Math.round(h.gust)}</text>`;
-    out += `<text x="${cx}" y="192" fill="rgba(255,255,255,.75)" font-size="11" text-anchor="middle">${p.hour === 0 ? cap(fmt({ weekday: 'short' }).format(h.t * 1000)) : String(p.hour).padStart(2, '0')}</text>`;
+    out += `<g transform="rotate(${rot} ${cx} 148)"><path d="M${cx} 139 l6 14 l-6 -4 l-6 4z" fill="${wc}"/></g>`;
+    out += `<text x="${cx}" y="172" fill="#fff" font-size="11" text-anchor="middle">${h.wind == null ? '—' : Math.round(h.wind)}</text>`;
+    out += `<text x="${cx}" y="186" fill="rgba(255,255,255,.5)" font-size="9.5" text-anchor="middle">${h.gust == null ? '' : Math.round(h.gust)}</text>`;
+    out += `<text x="${cx}" y="206" fill="rgba(255,255,255,.75)" font-size="11" text-anchor="middle">${p.hour === 0 ? cap(fmt({ weekday: 'short' }).format(h.t * 1000)) : String(p.hour).padStart(2, '0')}</text>`;
   });
   return `<svg width="${hs.length * W}" height="${H}" viewBox="0 0 ${hs.length * W} ${H}" role="img" aria-label="Onada i vent per hores">${out}</svg>
     <div class="legend" style="padding:6px 8px 0">
       <span>A dalt: índex de nedada (0-10)</span>
       <span><i style="background:#a8dcff"></i>Onada a la platja (m)</span>
       <span><i style="background:none;border:1px dashed rgba(168,220,255,.7)"></i>Mar obert</span>
+      <span>Segons: període, <b style="color:${KIND_COLOR.picada}">picada</b> / <b style="color:${KIND_COLOR.creuada}">creuada</b> / <b style="color:${KIND_COLOR.curta}">curta</b> / <b style="color:${KIND_COLOR.llarga}">llarga</b></span>
       <span>Fletxa: vent <b style="color:#9be7b4">de terra</b> / <b style="color:#ffb46b">de mar</b> · km/h i ratxes</span>
     </div>`;
 }
@@ -537,7 +587,31 @@ $('beaches').addEventListener('click', (e) => {
 
 $('dClose').onclick = closeDetail;
 $('detail').addEventListener('click', (e) => { if (e.target === $('detail')) closeDetail(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('detail').hidden) closeDetail(); });
+
+// Manual "Com funciona": s'obre des de la capçalera o des de la fitxa, a la secció que toca.
+function openHelp(key) {
+  $('help').hidden = false;
+  const panel = $('help').querySelector('.sheet-panel');
+  const target = key && key !== 'top' ? $(`h-${key}`) : null;
+  const head = panel.querySelector('.sheet-head').offsetHeight; // la capçalera queda fixa a dalt
+  panel.scrollTop = target ? target.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop - head - 4 : 0;
+}
+const closeHelp = () => { $('help').hidden = true; };
+document.addEventListener('click', (e) => {
+  const k = e.target.closest('[data-help]')?.dataset.help;
+  if (k) openHelp(k);
+});
+$('helpClose').onclick = closeHelp;
+$('help').addEventListener('click', (e) => {
+  if (e.target === $('help')) return closeHelp();
+  const a = e.target.closest('.help-nav a');
+  if (a) { e.preventDefault(); openHelp(a.getAttribute('href').slice(3)); }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!$('help').hidden) closeHelp();
+  else if (!$('detail').hidden) closeDetail();
+});
 $('refreshBtn').onclick = () => load(true);
 
 setInterval(() => { if (document.visibilityState === 'visible') load(); }, 15 * 60 * 1000);

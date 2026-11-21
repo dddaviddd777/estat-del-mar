@@ -38,6 +38,8 @@ Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, 
 - Semàfor: verd = molt correcte (< 0,3 m), groc = una mica mogut (0,3–0,8 m), vermell = mala mar de debò (≥ 0,8 m o vent fort). El vermell no s'ha de posar per poca cosa.
 - Índex de nedada 0-10: penalització d'onada i de vent/ratxes (3 al llindar de groc, 6 al de vermell); compta la pitjor sencera + un terç de l'altra. Més de 7 = bo, de 4 a 7 = mogut, 4 o menys = mala mar. El semàfor surt de l'índex.
 - Llindars de vent (km/h, groc/vermell): de mar 15/35, lateral 20/38, de terra 25/40; ratxes 35/50.
+- Per a l'usuari, la direcció de l'onada pesa més que la del vent, i el període compta molt (21/11/2026). `seaState` a `marine.js`: tipus de mar segons el període de pic (el més gran entre pic i mitjà): picada/choppy < 4 s (×1,25 a l'índex), curta 4–6 s (×1), mitjana 6–8 s (×0,95), llarga ≥ 8 s (×0,9), creuada/rentadora si dos trens d'onades difereixen ≥ 45° i el segon fa ≥ 40 % (×1,2). El factor només afecta l'índex, no l'alçada que es mostra. Refracció: amb període llarg el sector obert s'eixampla fins a 20°. Valors estimats, a calibrar.
+- Manual "Com funciona" (botó "i" de la capçalera, i des de la fitxa) a `index.html` (`#help`). Si canvien llindars o factors, actualitza'l també.
 - Mapa: només etiquetes (cercle de color amb l'onada + nom + pastilla de vent amb fletxa, km/h i color segons la força). Sense punts ni línies.
 - Botons ràpids: "Ara", "Demà 9 h" i demà passat a les 9 h amb el nom del dia.
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).

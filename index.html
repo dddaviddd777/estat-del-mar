@@ -22,9 +22,9 @@
 
 <div class="app">
   <header class="top">
-    <span class="icon-btn logo" aria-hidden="true">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 14c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 19c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg>
-    </span>
+    <button class="icon-btn" data-help="top" aria-label="Com funciona" title="Com funciona">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r=".6" fill="currentColor"/></svg>
+    </button>
     <h1 class="page-title">Estat del Mar<small>Costa Brava</small></h1>
     <button class="icon-btn" id="refreshBtn" aria-label="Actualitzar" title="Actualitzar">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
@@ -76,6 +76,103 @@
       </button>
     </div>
     <div id="dBody"></div>
+  </div>
+</div>
+
+<div class="sheet help-sheet" id="help" hidden>
+  <div class="sheet-panel sea-panel help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="sheet-head">
+      <div class="d-title"><h3 id="helpTitle">Com funciona</h3><small>Manual i diccionari del mar per a nedadors</small></div>
+      <button class="icon-btn" id="helpClose" aria-label="Tancar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <nav class="help-nav">
+      <a href="#h-direccio">Direcció</a><a href="#h-periode">Període</a><a href="#h-tipus">Tipus de mar</a><a href="#h-vent">Vent</a><a href="#h-index">Índex</a><a href="#h-dades">Dades</a><a href="#h-diccionari">Diccionari</a>
+    </nav>
+
+    <p>Per saber com estarà el mar a una platja, l'app es fa tres preguntes: <b>d'on ve l'onada</b>, <b>com és</b> (alçada i període) i <b>quin vent fa</b>. Normalment la primera és la que més pesa.</p>
+
+    <h4 id="h-direccio">1. D'on ve l'onada (el més important)</h4>
+    <p>Les onades vénen d'una direcció: "onada del SE" vol dir que <b>vénen</b> del sud-est. Cada platja mira cap a un costat i té un <b>sector obert</b> al mar. Si l'onada ve de dins d'aquest sector, entra de ple; si ve de fora, arriba reduïda, fins a quedar-se en un 10 %. Per això, el mateix dia, una cala pot estar plana i la del costat moguda.</p>
+    <p class="help-eg">Exemple: amb llevant (de l'E), Tamariu, que mira a l'est, l'agafa de ple, i Llafranc, que mira al sud, molt menys. Amb garbí (del SO), passa al revés.</p>
+    <p>Les onades de període llarg "giren" en arribar a poca fondària (<b>refracció</b>) i entren més a les cales. L'app ho té en compte: com més llarg és el període, més s'eixampla el sector obert (fins a 20°) i més onada s'escola (fins a un 20 %).</p>
+
+    <h4 id="h-periode">2. El període: la distància entre crestes</h4>
+    <p>El <b>període</b> són els segons que passen entre dues crestes. Com més llarg, més separades estan les onades i més es poden anticipar. Mar endins, la distància entre crestes és d'uns <b>1,56 × període²</b> metres:</p>
+    <table class="help-tab">
+      <tr><th>Període</th><th>Entre crestes</th><th>Com es nota nedant</th></tr>
+      <tr><td>3 s</td><td>~14 m</td><td>Onades seguides i punxegudes: et sacsegen</td></tr>
+      <tr><td>5 s</td><td>~39 m</td><td>El normal a la Costa Brava: regulars</td></tr>
+      <tr><td>7 s</td><td>~76 m</td><td>Espaiades: les veus venir</td></tr>
+      <tr><td>10 s</td><td>~156 m</td><td>Mar de fons ampla i suau mar endins</td></tr>
+    </table>
+    <p>Amb la mateixa alçada, una onada de 3 s és molt més incòmoda que una de 8 s. Per això l'app no mira només l'alçada.</p>
+
+    <h4 id="h-tipus">3. Tipus de mar</h4>
+    <table class="help-tab">
+      <tr><th>Tipus</th><th>Quan</th><th>A l'índex</th></tr>
+      <tr><td><b class="k-picada">Picada (choppy)</b></td><td>Període de menys de 4 s</td><td>Compta un 25 % més alta</td></tr>
+      <tr><td><b class="k-creuada">Creuada (rentadora)</b></td><td>Dos trens d'onades de direccions separades 45° o més, i el segon fa almenys un 40 % del primer</td><td>Compta un 20 % més alta</td></tr>
+      <tr><td><b class="k-curta">Curta</b></td><td>De 4 a 6 s</td><td>Igual que la seva alçada</td></tr>
+      <tr><td><b class="k-mitjana">Mitjana</b></td><td>De 6 a 8 s</td><td>Un 5 % menys</td></tr>
+      <tr><td><b class="k-llarga">Llarga (mar de fons)</b></td><td>8 s o més</td><td>Un 10 % menys</td></tr>
+      <tr><td><b class="k-plana">Plana</b></td><td>Menys de 0,12 m a la platja</td><td>—</td></tr>
+    </table>
+    <p><b>Mar de vent</b>: la que aixeca el vent que bufa ara, a prop. És curta, punxeguda i desordenada. <b>Mar de fons</b>: ve d'un vent llunyà o d'un temporal que ja ha passat. És més regular i llarga. Sovint n'hi ha de tots dos tipus alhora, i si vénen de direccions diferents, la mar és creuada.</p>
+    <p>Al Mediterrani els períodes són curts. La mar de fons de 8 s o més és rara: sol arribar després d'un temporal de llevant. Mar endins es neda bé, però a la vora <b>rompen amb més força</b>: compte en entrar i en sortir.</p>
+    <p>El període de pic que dona el model de vegades surt massa curt. L'app fa servir el més gran entre el període de pic i el mitjà.</p>
+
+    <h4 id="h-vent">4. El vent</h4>
+    <p>La direcció del vent també és <b>d'on bufa</b>. Respecte de la platja pot ser:</p>
+    <ul class="help-list">
+      <li><b>De mar</b> (bufa cap a la platja): aixeca onada curta a la vora encara que sigui fluix. Groc a partir de 15 km/h, vermell a partir de 35.</li>
+      <li><b>Lateral</b>: groc a partir de 20 km/h, vermell a partir de 38.</li>
+      <li><b>De terra</b> (bufa cap al mar): aplana la vora, però t'allunya de la platja. Groc a partir de 25 km/h, vermell a partir de 40.</li>
+      <li><b>Ratxes</b>: groc a partir de 35 km/h, vermell a partir de 50.</li>
+    </ul>
+    <p>L'onada sol pesar més que el vent: un vent fluix o moderat, tot sol, només arriba a groc.</p>
+
+    <h4 id="h-index">5. L'índex de nedada (0-10) i el semàfor</h4>
+    <ol class="help-list">
+      <li><b>Onada a la platja</b>: per a cada tren d'onades (mar de vent i mars de fons), l'alçada mar endins es multiplica per la part que entra segons d'on ve. Després se sumen.</li>
+      <li><b>Onada que compta</b>: es corregeix segons el tipus de mar (taula de dalt).</li>
+      <li><b>Penalització d'onada</b>: 0 punts fins a 0,1 m, 3 punts a 0,3 m, 6 a 0,8 m i 10 a 1,4 m.</li>
+      <li><b>Penalització de vent</b>: 3 punts al llindar de groc i 6 al de vermell. Es queda la pitjor entre vent i ratxes.</li>
+      <li><b>Índex = 10 − la penalització pitjor − un terç de l'altra.</b> Amb tempesta, 0.</li>
+    </ol>
+    <p>Semàfor: <b class="k-mitjana">més de 7, bo per nedar</b> · <b class="k-picada">de 4 a 7, una mica mogut</b> · <b class="k-creuada">4 o menys, mala mar</b>.</p>
+    <p class="help-eg">Exemple: 0,35 m a la platja amb vent de mar de 10 km/h. Si l'onada és curta (5 s), l'índex és 6,2. Si és picada (3 s), compta com 0,44 m i l'índex baixa a 5,7.</p>
+
+    <h4 id="h-dades">6. D'on surten les dades</h4>
+    <ul class="help-list">
+      <li><b>Onades</b>: model de Météo-France, per hores i fins a 4 dies, en punts entre 5 i 15 km mar endins. A la fitxa també es veuen l'ECMWF (el que ensenya el Windy), el GFS i el DWD.</li>
+      <li><b>Vent</b>: model AROME de Météo-France, molt detallat a la costa.</li>
+      <li><b>Boies</b>: Cap de Begur en directe. Cada hora es comparen el Cap de Begur, el Cap de Creus i la Tordera amb els models per saber quin l'encerta més.</li>
+      <li>Les orientacions de cada platja són aproximades i les anem calibrant amb el que trobeu a l'aigua.</li>
+    </ul>
+
+    <h4 id="h-diccionari">7. Diccionari</h4>
+    <dl class="help-dl">
+      <dt>Alçada significant</dt><dd>Mitjana del terç més alt de les onades. És la que donen els models i el Windy. De tant en tant n'arriba alguna de gairebé el doble.</dd>
+      <dt>Onada màxima</dt><dd>La més alta mesurada per la boia en aquella hora.</dd>
+      <dt>Període</dt><dd>Segons entre dues crestes. El <i>període de pic</i> és el del tren d'onades més fort; el <i>mitjà</i>, la mitjana de totes.</dd>
+      <dt>Longitud d'ona</dt><dd>Distància entre dues crestes (≈ 1,56 × període² m mar endins). A poca fondària s'escurça i l'onada s'aixeca.</dd>
+      <dt>Direcció</dt><dd>D'on vénen l'onada o el vent, en graus (0° = N, 90° = E, 180° = S, 270° = O).</dd>
+      <dt>Mar de vent</dt><dd>Onades fetes pel vent que bufa ara. Curtes i desordenades.</dd>
+      <dt>Mar de fons</dt><dd>Onades que vénen de lluny o d'un vent que ja ha parat. Llargues i regulars.</dd>
+      <dt>Mar picada (choppy)</dt><dd>Onades curtes i seguides, de menys de 4 s. Sensació d'anar a cops.</dd>
+      <dt>Mar creuada (rentadora)</dt><dd>Dos trens d'onades de direccions diferents que es barregen. Et mouen per tots costats.</dd>
+      <dt>Rompent</dt><dd>On l'onada trenca en arribar a poca fondària. La mar de fons llarga hi trenca amb més força.</dd>
+      <dt>Refracció</dt><dd>L'onada gira en arribar a poca fondària i acaba entrant a cales que no miren cap a on ve. Com més llarga és, més gira.</dd>
+      <dt>Sector obert</dt><dd>Direccions des d'on el mar pot entrar de ple a una platja.</dd>
+      <dt>Fetch</dt><dd>Distància de mar sobre la qual bufa el vent. Com més llarga, més onada aixeca. Per això, a la majoria d'aquestes platges, el llevant, que bufa sobre molt de mar, aixeca més onada que la tramuntana, que hi arriba des de terra.</dd>
+      <dt>Ratxa</dt><dd>Cop de vent curt, més fort que el vent mitjà.</dd>
+      <dt>Model</dt><dd>Programa que calcula la previsió en una graella de punts. N'hi ha diversos, i no sempre coincideixen.</dd>
+      <dt>Boia</dt><dd>Aparell que flota mar endins i mesura l'onada, el vent i l'aigua de veritat.</dd>
+      <dt>Vents de la rosa</dt><dd>Tramuntana (N), gregal (NE), llevant (E), xaloc (SE), migjorn (S), garbí (SO), ponent (O), mestral (NO).</dd>
+    </dl>
+    <p class="d-note">Tot són estimacions a partir de models que treballen a quilòmetres de la costa. Mira sempre el mar abans d'entrar i no nedis sol.</p>
   </div>
 </div>
 

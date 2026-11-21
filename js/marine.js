@@ -41,7 +41,10 @@ export function windName(deg) {
 const TTL = 60 * 60 * 1000; // els models d'onades s'actualitzen poques vegades al dia: n'hi ha prou amb 1 h
 
 const MARINE = ['wave_height', 'wave_direction', 'wave_period', 'wind_wave_height', 'wind_wave_direction',
-  'swell_wave_height', 'swell_wave_direction', 'swell_wave_period', 'sea_surface_temperature'];
+  'swell_wave_height', 'swell_wave_direction', 'swell_wave_period', 'sea_surface_temperature',
+  // Període de pic (el que més s'assembla al que mesura una boia) i segon mar de fons (per detectar mar creuada).
+  'wind_wave_period', 'wind_wave_peak_period', 'swell_wave_peak_period',
+  'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'];
 const WIND = ['wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'weather_code', 'temperature_2m'];
 
 /**
@@ -53,7 +56,7 @@ export const WAVE_MODELS = [
   { id: 'gfs', api: 'ncep_gfswave025', name: 'GFS Wave', note: 'EUA · també al Windy' },
   { id: 'dwd', api: 'dwd_ewam', name: 'DWD EWAM', note: 'Alemanya · més fi' },
 ];
-const DATA_VERSION = 2; // apujar-ho si canvia el format de les dades desades
+const DATA_VERSION = 3; // apujar-ho si canvia el format de les dades desades
 
 // ---------- Descàrrega ----------
 export function cachedMarine() {
@@ -83,6 +86,8 @@ export async function fetchMarine({ force = false } = {}) {
       hs: M.wave_height[k], dir: M.wave_direction[k], per: M.wave_period[k],
       ww: M.wind_wave_height[k], wwDir: M.wind_wave_direction[k],
       sw: M.swell_wave_height[k], swDir: M.swell_wave_direction[k], swPer: M.swell_wave_period[k],
+      wwPer: M.wind_wave_period?.[k] ?? null, wwTp: M.wind_wave_peak_period?.[k] ?? null, swTp: M.swell_wave_peak_period?.[k] ?? null,
+      s2: M.secondary_swell_wave_height?.[k] ?? null, s2Dir: M.secondary_swell_wave_direction?.[k] ?? null, s2Per: M.secondary_swell_wave_period?.[k] ?? null,
       sst: M.sea_surface_temperature[k],
       wind: W.wind_speed_10m[k], windDir: W.wind_direction_10m[k], gust: W.wind_gusts_10m[k],
       code: W.weather_code[k], air: W.temperature_2m[k],
@@ -103,13 +108,65 @@ async function getJson(url) {
 // ---------- Anàlisi ----------
 const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; };
 
-/** Quina part de l'onada que ve de `fromDir` entra a la platja (1 = de ple, 0,1 = molt arrecerada). */
-export function exposure(beach, fromDir) {
+/**
+ * Quina part de l'onada que ve de `fromDir` entra a la platja (1 = de ple, 0,1 = molt arrecerada).
+ * Amb període llarg (`T`, s) l'onada "gira" més en arribar a poca fondària (refracció) i entra a cales
+ * que una onada curta no toca: el sector obert s'eixampla fins a 20° i la part que s'escola puja.
+ */
+export function exposure(beach, fromDir, T = null) {
   if (fromDir == null) return 1;
   const d = angDiff(fromDir, beach.facing);
-  if (d <= beach.open) return 1;
-  if (d >= beach.open + 45) return 0.1;
-  return 1 - 0.9 * ((d - beach.open) / 45);
+  const open = beach.open + (T ? Math.max(0, Math.min(20, (T - 6) * 5)) : 0);
+  const leak = T >= 9 ? 0.2 : 0.1;
+  if (d <= open) return 1;
+  if (d >= open + 45) return leak;
+  return 1 - (1 - leak) * ((d - open) / 45);
+}
+
+/**
+ * Tipus de mar per a qui neda. El període (segons entre dues crestes) diu com és l'onada:
+ * curt = onades seguides i punxegudes (picada, "choppy"); llarg = onades espaiades que es veuen venir.
+ * Si arriben dos trens d'onades de direccions diferents, la mar és creuada ("rentadora").
+ * `factor`: quant pesa l'onada a l'índex de nedada respecte de la seva alçada (1 = el que mesura).
+ */
+export const SEA_KINDS = {
+  plana: { label: 'Plana', factor: 1, tip: 'Pràcticament sense onada.' },
+  picada: { label: 'Picada (choppy)', factor: 1.25, tip: 'Onades curtes, seguides i desordenades: et sacsegen i costa agafar ritme. Compta com un 25 % més alta.' },
+  curta: { label: 'Curta', factor: 1, tip: 'La més habitual a la Costa Brava: onades properes però regulars.' },
+  mitjana: { label: 'Mitjana', factor: 0.95, tip: 'Onades més espaiades: es poden anticipar i molesten menys.' },
+  llarga: { label: 'Llarga (mar de fons)', factor: 0.9, tip: 'Onades amples i suaus que es veuen venir; nedant mar endins es passen bé, però a la vora rompen amb més força.' },
+  creuada: { label: 'Creuada (rentadora)', factor: 1.2, tip: 'Dos trens d\x27onades de direccions diferents es barregen: mar confusa que et mou per tots costats. Compta com un 20 % més alta.' },
+};
+// Llindars del període de pic (s), pensats per al Mediterrani, on el mar sol tenir períodes curts.
+export const PERIOD_LIMITS = { picada: 4, curta: 6, mitjana: 8 };
+
+const wavelength = (T) => (T ? 1.56 * T * T : null); // aigües fondes: distància entre crestes (m) ≈ 1,56 · T²
+
+export function seaState(beach, h) {
+  const comps = [];
+  const add = (H, dir, T, src) => {
+    if (H == null) return;
+    const d = dir ?? h.dir;
+    comps.push({ h: H * exposure(beach, d, T), off: H, dir: d, T, src });
+  };
+  if (h.ww != null || h.sw != null) {
+    // El període de pic del model de vegades surt absurd (1,5 s per a mig metre): el de pic mai és menor que el mitjà.
+    const per = (tp, tm) => (tp == null && tm == null ? h.per ?? null : Math.max(tp ?? 0, tm ?? 0));
+    add(h.ww, h.wwDir, per(h.wwTp, h.wwPer), 'vent');
+    add(h.sw, h.swDir, per(h.swTp, h.swPer), 'fons');
+    add(h.s2, h.s2Dir, h.s2Per, 'fons2');
+  } else add(h.hs, h.dir, h.per, 'total');
+  if (!comps.length) return null;
+  const hb = Math.sqrt(comps.reduce((s, c) => s + c.h * c.h, 0));
+  const sorted = comps.filter((c) => c.h > 0.01).sort((a, b) => b.h - a.h);
+  const dom = sorted[0], sec = sorted[1];
+  const T = dom?.T ?? h.per ?? null;
+  let kind;
+  if (hb < 0.12) kind = 'plana';
+  else if (sec && sec.h >= 0.12 && sec.h >= 0.4 * dom.h && angDiff(dom.dir, sec.dir) >= 45) kind = 'creuada';
+  else if (T == null) kind = 'curta';
+  else kind = T < PERIOD_LIMITS.picada ? 'picada' : T < PERIOD_LIMITS.curta ? 'curta' : T < PERIOD_LIMITS.mitjana ? 'mitjana' : 'llarga';
+  return { hb, eff: hb * SEA_KINDS[kind].factor, kind, T, len: wavelength(T), dir: dom?.dir ?? h.dir, src: dom?.src, comps: sorted };
 }
 
 /** Relació del vent amb la platja: 'mar' (bufa cap a la platja), 'terra' (cap al mar) o 'lateral'. */
@@ -121,14 +178,9 @@ export function windRelation(beach, fromDir) {
   return 'lateral';
 }
 
-/** Onada estimada a la platja (m): components de mar de vent i mar de fons, cadascun amb la seva exposició. */
+/** Onada estimada a la platja (m): mar de vent i mars de fons, cadascun amb la seva direcció, període i exposició. */
 export function beachWave(beach, h) {
-  if (h.ww != null || h.sw != null) {
-    const a = (h.ww ?? 0) * exposure(beach, h.wwDir ?? h.dir);
-    const b = (h.sw ?? 0) * exposure(beach, h.swDir ?? h.dir);
-    return Math.sqrt(a * a + b * b);
-  }
-  return h.hs == null ? null : h.hs * exposure(beach, h.dir);
+  return seaState(beach, h)?.hb ?? null;
 }
 
 export const LEVELS = [
@@ -161,12 +213,15 @@ const clamp10 = (v) => Math.max(0, Math.min(10, v));
  * Semàfor: més de 7 = bo, de 4 a 7 = mogut, 4 o menys = mala mar.
  */
 export function analyze(beach, h) {
-  const bw = beachWave(beach, h);
+  const sea = seaState(beach, h);
+  const bw = sea?.hb ?? null;
   const rel = windRelation(beach, h.windDir);
   const why = [];
   const [w0, w1] = WAVE_LIMITS, [v0, v1] = WIND_LIMITS[rel], [g0, g1] = GUST_LIMITS;
 
-  const pWave = bw == null ? 3 : ramp(bw, [[0.1, 0], [w0, 3], [w1, 6], [w1 + 0.6, 10]]);
+  // L'onada compta segons el tipus de mar: la picada o creuada pesa més que la seva alçada; la llarga, una mica menys.
+  const pWave = bw == null ? 3 : ramp(sea.eff, [[0.1, 0], [w0, 3], [w1, 6], [w1 + 0.6, 10]]);
+  if (sea && pWave >= 1.5 && (sea.kind === 'picada' || sea.kind === 'creuada')) why.push(sea.kind === 'picada' ? 'mar picada (choppy)' : 'mar creuada (rentadora)');
   const pWind = Math.max(
     ramp(h.wind ?? 0, [[5, 0], [v0, 3], [v1, 6], [v1 + 15, 10]]),
     ramp(h.gust ?? 0, [[20, 0], [g0, 3], [g1, 6], [g1 + 20, 10]]),
@@ -187,7 +242,7 @@ export function analyze(beach, h) {
     waveScore: Math.round(clamp10(10 - pWave)),
     windScore: Math.round(clamp10(10 - pWind)),
     windLevel: levelOf(10 - pWind),
-    beachHs: bw, rel, why,
+    beachHs: bw, rel, why, sea,
   };
 }
 
