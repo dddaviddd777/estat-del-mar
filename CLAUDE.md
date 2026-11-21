@@ -23,7 +23,10 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 ## Dades
 - Onades: Open-Meteo Marine (best_match, ~MeteoFrance wave), punts a 5-15 km mar endins, `cell_selection=sea`. Vent: Open-Meteo Forecast (AROME). Gratuït, sense clau, una sola crida per a totes les platges.
 - API del Windy descartada: la prova dona dades falses i la real costa 990 €/any.
-- Futur: boies de Puertos del Estado (Cap de Begur, Palamós) i Meteocat (vent costaner i avisos). La clau de Meteocat, si mai s'usa aquí, **mai al repo** (repo públic): aniria com a secret d'un Cloudflare Worker.
+- Contrast de models (fitxa de platja): una tercera crida a Open-Meteo Marine amb `models=ecmwf_wam,ncep_gfswave025,dwd_ewam` (onada i direcció), desada a `h.mod`. ECMWF és el que el Windy ensenya per defecte. Si canvia el format de les dades desades, apuja `DATA_VERSION` a `marine.js`.
+- Temperatura de l'aigua: requadre al mapa (dalt a l'esquerra, sobre terra), mitjana de les platges amb escala de color (`sstColor`).
+- Boies (estudi a `PLA.md` §7): Cap de Begur (Puertos del Estado, 2798) es pot llegir directament des del navegador (API interna de Portus, CORS obert). Palamós (1718) no té dades. Les d'ICATMAR (Cap de Creus, Tordera; Montgó i Medes, d'estiu) rebutgen el navegador: caldria un intermediari.
+- Futur: Meteocat (vent costaner i avisos). La clau de Meteocat, si mai s'usa aquí, **mai al repo** (repo públic): aniria com a secret d'un Cloudflare Worker.
 
 ## Platges (14, de nord a sud)
 Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, La Fosca, Palamós (Platja Gran), Sant Antoni, Sant Feliu, Tossa, Lloret.
@@ -40,7 +43,7 @@ Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, 
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).
 
 ## Pendent (proposat, no fet)
-1. Botó "Obre al Windy" a cada platja (enllaç al Windy en aquell punt amb la capa d'onades) per comparar.
+1. ~~Botó "Obre al Windy"~~ fet el 21/11/2026, amb comparació de models a la fitxa. Proposat: mostrar la lectura de la boia del Cap de Begur a l'app, i guardar cada hora boia + models (GitHub Action) per calibrar.
 2. Diari de nedades: platja, hora, com estava el mar (0-10) i onada observada, guardat al mòbil amb exportació; servirà per calibrar orientacions i pesos amb dades reals.
 3. Calibratge de 2-3 setmanes amb el Windy i el que trobin a l'aigua.
 4. Més endavant: boies reals, Meteocat, avís la nit abans.
