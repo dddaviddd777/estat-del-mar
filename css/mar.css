@@ -118,3 +118,27 @@ a.icon-btn { color: inherit; text-decoration: none; }
 .windy-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 10px; border-radius: 12px;
   background: #fff; color: #0f2a45; font-weight: 500; font-size: 15px; text-decoration: none; }
 .windy-btn:active { background: #dbeefc; }
+
+/* Boia del Cap de Begur */
+.buoy-card[hidden] { display: none; }
+.by-now { display: flex; gap: 14px; align-items: center; }
+.by-big { flex: none; width: 84px; height: 84px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--c); color: #0b1d2c; box-shadow: inset 0 0 0 2px rgba(11, 29, 44, .2); }
+.by-big b { font-size: 24px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
+.by-big b small { font-size: 13px; font-weight: 500; }
+.by-big span { font-size: 11px; margin-top: 3px; opacity: .8; }
+.by-facts { list-style: none; flex: 1; min-width: 0; font-size: 14px; line-height: 1.35; }
+.by-facts li { padding: 3px 0; }
+.by-facts li span { display: inline-block; width: 52px; color: var(--soft); font-size: 12.5px; }
+.by-facts .sst-dot, .d-facts .sst-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.by-when { font-size: 12px; color: var(--soft); margin-top: 8px; }
+.by-when.stale { color: #ffb46b; }
+.by-h { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); margin: 14px 0 4px; font-weight: 500; }
+.by-models { list-style: none; }
+.by-models li { display: grid; grid-template-columns: 1fr 58px 136px; gap: 8px; align-items: center; padding: 6px 0; font-size: 14px; border-top: 1px solid rgba(255, 255, 255, .1); }
+.by-models li:first-child { border-top: 0; }
+.by-models li span small { display: block; font-size: 11px; color: var(--faint); }
+.by-models em { font-style: normal; text-align: right; font-weight: 500; }
+.by-models i { font-style: normal; font-size: 12.5px; color: var(--soft); }
+.by-models li.best i { color: #9be7b4; font-weight: 500; }
+.by-note { font-size: 12px; color: var(--faint); line-height: 1.45; margin-top: 8px; }

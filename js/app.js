@@ -1,6 +1,7 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE } from './marine.js';
 import * as store from './store.js';
+import { BUOY, fetchBuoy, cachedBuoy, modelBias } from './buoy.js';
 
 const $ = (id) => document.getElementById(id);
 const nf1 = new Intl.NumberFormat('ca', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -32,7 +33,17 @@ function ago(ms) {
 }
 
 // ---------- Càrrega ----------
+// La boia va a part: si falla, la resta de l'app funciona igual.
+let buoy = cachedBuoy();
+let buoyErr = null;
+async function loadBuoy(force = false) {
+  try { buoy = await fetchBuoy({ force }); buoyErr = null; } catch (e) { buoyErr = e.message; }
+  renderBuoy();
+  if (selected) renderDetail();
+}
+
 async function load(force = false) {
+  loadBuoy(force);
   const first = !data;
   data = data || cachedMarine();
   if (data && first) { setNow(); renderAll(); }
@@ -72,6 +83,7 @@ function renderAll() {
   const sw = swimWindow();
   $('listHint').textContent = `millor franja entre les ${sw.from} i les ${sw.to} h`;
   initMap();
+  renderBuoy();
   renderTime();
   if (selected) renderDetail();
 }
@@ -280,6 +292,61 @@ function toggleFav(id) {
   if (selected === id) renderDetail();
 }
 
+// ---------- Boia del Cap de Begur ----------
+const signed = (v) => (v > 0.005 ? '+' : v < -0.005 ? '−' : '±') + nf2.format(Math.abs(v));
+const nf2 = new Intl.NumberFormat('ca', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function renderBuoy() {
+  const el = $('buoyCard');
+  if (!buoy?.reading) {
+    el.hidden = !buoyErr;
+    if (buoyErr) el.innerHTML = `<h2>Boia del ${BUOY.name}</h2><p class="by-note">No s'ha pogut llegir la boia: ${buoyErr}</p>`;
+    return;
+  }
+  el.hidden = false;
+  const r = buoy.reading;
+  const ageMin = (Date.now() / 1000 - r.t) / 60;
+  const old = ageMin > 180;
+  const when = `${dayLabel(r.t) === 'Avui' ? '' : dayLabel(r.t).toLowerCase() + ' '}a les ${hh(r.t)} h (${ago(r.t * 1000)})`;
+  const lv = r.hs == null ? null : r.hs < 0.3 ? 0 : r.hs < 0.8 ? 1 : 2;
+
+  const ms = (buoy.models || []).filter((x) => x.hs != null);
+  let models = '';
+  if (ms.length && r.hs != null) {
+    const best = ms.reduce((a, x) => (Math.abs(x.hs - r.hs) < Math.abs(a.hs - r.hs) ? x : a));
+    models = `<div class="by-h">Què deien els models per a les ${hh(r.t)} h, aquí mateix</div>
+      <ul class="by-models">${ms.map((x) => `<li class="${x === best ? 'best' : ''}">
+        <span>${x.name}<small>${x.note}</small></span>
+        <em>${nf2.format(x.hs)} m</em>
+        <i>${signed(x.hs - r.hs)} m${x === best ? ' · més encertat' : ''}</i>
+      </li>`).join('')}</ul>`;
+    const bias = modelBias();
+    const n = Math.max(0, ...Object.values(bias).map((o) => o.n));
+    if (n >= 6) {
+      models += `<p class="by-note">Mitjana de les ${n} hores que s'han comparat en aquest mòbil: ${ms.filter((x) => bias[x.id])
+        .map((x) => `${x.name} ${signed(bias[x.id].bias)} m`).join(' · ')}. Positiu vol dir que el model dona més onada que la real.</p>`;
+    } else {
+      models += `<p class="by-note">Cada hora que obris l'app es guarda aquesta comparació al mòbil; d'aquí a uns dies veurem quin model l'encerta més de mitjana.</p>`;
+    }
+  }
+
+  el.innerHTML = `
+    <h2>Boia ${BUOY.name} <span>mesurat, ${BUOY.km} km mar endins</span></h2>
+    <div class="by-now">
+      <div class="by-big" style="--c:${lv == null ? '#9aa9b5' : LEVELS[lv].color}">
+        <b>${r.hs == null ? '—' : nf2.format(r.hs)}<small> m</small></b>
+        <span>${r.hmax != null ? `màx. ${nf2.format(r.hmax)} m` : 'onada'}</span>
+      </div>
+      <ul class="by-facts">
+        <li><span>Onada</span>${r.dir == null ? '—' : `del ${windName(r.dir)} (${Math.round(r.dir)}°)`}${r.tp ? ` · ${nf1.format(r.tp)} s` : ''}</li>
+        <li><span>Vent</span>${r.wind == null ? '—' : `${Math.round(r.wind)} km/h del ${windName(r.windDir)}`}</li>
+        <li><span>Aigua</span>${r.sst == null ? '—' : `<i class="sst-dot" style="background:${sstColor(r.sst)}"></i>${nf1.format(r.sst)} °C`}</li>
+      </ul>
+    </div>
+    <p class="by-when ${old ? 'stale' : ''}">Lectura ${when}${old ? ' · dada antiga, la boia pot estar sense transmetre' : ''}</p>
+    ${models}`;
+}
+
 // ---------- Fitxa de platja ----------
 function openDetail(id) {
   selected = id;
@@ -326,6 +393,8 @@ function renderDetail() {
     ['Aigua', h.sst == null ? '—' : `<i class="sst-dot" style="background:${sstColor(h.sst)}"></i>${nf1.format(h.sst)} °C, ${sstWord(h.sst)}`],
     ['Aire', h.air == null ? '—' : `${Math.round(h.air)} °C`],
   ];
+  const br = buoy?.reading;
+  if (br?.hs != null) facts.push([`Boia ${BUOY.name}`, `${m(br.hs)} m del ${windName(br.dir)} · ${hh(br.t)} h (mesurat, mar obert)`]);
 
   $('dBody').innerHTML = `
     <div class="d-now">

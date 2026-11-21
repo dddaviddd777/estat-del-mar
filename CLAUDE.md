@@ -43,7 +43,7 @@ Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, 
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).
 
 ## Pendent (proposat, no fet)
-1. ~~Botó "Obre al Windy"~~ fet el 21/11/2026, amb comparació de models a la fitxa. Proposat: mostrar la lectura de la boia del Cap de Begur a l'app, i guardar cada hora boia + models (GitHub Action) per calibrar.
+1. ~~Botó "Obre al Windy"~~ i ~~boia del Cap de Begur~~ fets el 21/11/2026 (`js/buoy.js`: lectura, comparació amb els models al mateix punt i registre `buoyLog` al mòbil, només quan s'obre l'app). Proposat: guardar cada hora boia + models amb una GitHub Action per calibrar sense dependre del mòbil.
 2. Diari de nedades: platja, hora, com estava el mar (0-10) i onada observada, guardat al mòbil amb exportació; servirà per calibrar orientacions i pesos amb dades reals.
 3. Calibratge de 2-3 setmanes amb el Windy i el que trobin a l'aigua.
 4. Més endavant: boies reals, Meteocat, avís la nit abans.
