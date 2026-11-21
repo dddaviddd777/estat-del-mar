@@ -1,6 +1,6 @@
 // Service worker: permet obrir l'app sense connexió.
 // Les dades del mar NO es guarden aquí (les desa l'app amb la seva hora), només els fitxers de l'app.
-const VERSION = 'mar-v3';
+const VERSION = 'mar-v4';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'css/mar.css', 'manifest.webmanifest',
   'js/app.js', 'js/marine.js', 'js/store.js', 'js/buoy.js',
@@ -28,7 +28,7 @@ self.addEventListener('fetch', (e) => {
 
   // Primer la xarxa (per tenir sempre la darrera versió); si no n'hi ha, la còpia desada.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, sameOrigin ? { cache: 'no-cache' } : undefined) // no-cache: comprova sempre si hi ha versió nova (GitHub Pages diu max-age=600)
       .then((res) => {
         if (res.ok || res.type === 'opaque') {
           const copy = res.clone();

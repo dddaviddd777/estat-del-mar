@@ -298,6 +298,7 @@ const nf2 = new Intl.NumberFormat('ca', { minimumFractionDigits: 2, maximumFract
 
 function renderBuoy() {
   const el = $('buoyCard');
+  if (!el) return; // index.html antic encara a la memòria del navegador
   if (!buoy?.reading) {
     el.hidden = !buoyErr;
     if (buoyErr) el.innerHTML = `<h2>Boia del ${BUOY.name}</h2><p class="by-note">No s'ha pogut llegir la boia: ${buoyErr}</p>`;
