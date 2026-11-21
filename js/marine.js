@@ -9,7 +9,7 @@ import * as store from './store.js';
  */
 export const BEACHES = [
   { id: 'montgo', name: 'Cala Montgó', short: 'Montgó', town: "L'Escala", lat: 42.1074, lon: 3.1685, facing: 100, open: 30, sea: [42.1071, 3.1706] },
-  { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0371, lon: 3.1954, facing: 100, open: 65, sea: [42.0368, 3.1972] },
+  { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0549, lon: 3.2164, facing: 95, open: 75, sea: [42.0549, 3.2164] },
   { id: 'sariera', name: 'Sa Riera', short: 'Sa Riera', town: 'Begur', lat: 41.973, lon: 3.2109, facing: 35, open: 50, sea: [41.9739, 3.2123] },
   { id: 'satuna', name: 'Sa Tuna', short: 'Sa Tuna', town: 'Begur', lat: 41.9588, lon: 3.2324, facing: 55, open: 40, sea: [41.9614, 3.2318] },
   { id: 'aiguablava', name: 'Aiguablava', short: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 15, open: 30, sea: [41.9351, 3.2165] },

@@ -7,6 +7,7 @@
 <body><script type="module">
 import { BEACHES } from '../js/marine.js';
 const q = new URLSearchParams(location.search), Z = Number(q.get('z') || 15);
+if (q.get('w')) document.head.insertAdjacentHTML('beforeend', `<style>body{display:block}div.m{width:${q.get('w')}px;height:${q.get('h') || 600}px}</style>`);
 const end = (p, deg, km) => { const f = deg * Math.PI / 180; return [p[0] + km / 111.32 * Math.cos(f), p[1] + km / (111.32 * Math.cos(p[0] * Math.PI / 180)) * Math.sin(f)]; };
 for (const b of BEACHES.filter((x) => !q.get('b') || x.id === q.get('b'))) {
   const c = document.createElement('div'); c.className = 'c'; c.innerHTML = `<b>${b.short} · mira ${b.facing}° · obert ±${b.open}°</b><div class="m"></div>`; document.body.append(c);
