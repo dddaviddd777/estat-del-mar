@@ -31,8 +31,7 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 ## Platges (14, de nord a sud)
 Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, La Fosca, Palamós (Platja Gran), Sant Antoni, Sant Feliu, Tossa, Lloret.
 - `facing` = cap on mira la platja (graus), `open` = mitja obertura del sector obert, `sea` = punt del mapa ~150 m mar endins, revisat sobre el mapa ampliat.
-- Orientacions estimades per Claude i encara per validar amb l'usuari: Cala Montgó (80°, s'obre a l'est), Sa Tuna (55°), Tossa (120°), Lloret (155°).
-- Aiguablava corregida el 21/11/2026 (abans 80°, i el punt queia damunt del Parador): la cala s'obre al N-NE, `facing` 15, `open` 30. Amb mar de fons del S/SO hi arriba molt poca onada, i és correcte.
+- Orientacions revisades totes sobre el mapa (OSM, zoom 14-15) el 21/11/2026 amb `tools/check-points.html`. Canvis: Montgó 80→100° (±30, la cala s'obre a l'ESE i el cap de Montgó la tapa del N-NE; coordenades de la platja corregides), Aiguablava 80→15° (±30, s'obre al N-NE; el punt queia damunt del Parador), Tamariu 100→120° (±50), Calella 150→125° (±50, el S-SO el tapa la costa fins al Cap Roig), La Fosca 160→125° (±45, el Cap Gros la tapa del S), Sant Antoni 160→145° (±60). La resta ja quadraven. Falten validar amb l'experiència de l'usuari.
 - Si s'afegeix una platja, `cachedMarine()` descarta les dades desades automàticament (comprova que hi siguin totes).
 
 ## Criteris decidits per l'usuari

@@ -8,17 +8,17 @@ import * as store from './store.js';
  * `sea`: punt on es dibuixa al mapa, uns 150 m mar endins.
  */
 export const BEACHES = [
-  { id: 'montgo', name: 'Cala Montgó', short: 'Montgó', town: "L'Escala", lat: 42.1055, lon: 3.1665, facing: 80, open: 40, sea: [42.1071, 3.1706] },
+  { id: 'montgo', name: 'Cala Montgó', short: 'Montgó', town: "L'Escala", lat: 42.1074, lon: 3.1685, facing: 100, open: 30, sea: [42.1071, 3.1706] },
   { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0371, lon: 3.1954, facing: 100, open: 65, sea: [42.0368, 3.1972] },
   { id: 'sariera', name: 'Sa Riera', short: 'Sa Riera', town: 'Begur', lat: 41.973, lon: 3.2109, facing: 35, open: 50, sea: [41.9739, 3.2123] },
   { id: 'satuna', name: 'Sa Tuna', short: 'Sa Tuna', town: 'Begur', lat: 41.9588, lon: 3.2324, facing: 55, open: 40, sea: [41.9614, 3.2318] },
   { id: 'aiguablava', name: 'Aiguablava', short: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 15, open: 30, sea: [41.9351, 3.2165] },
-  { id: 'tamariu', name: 'Tamariu', short: 'Tamariu', town: 'Palafrugell', lat: 41.9176, lon: 3.2074, facing: 100, open: 45, sea: [41.9172, 3.2095] },
+  { id: 'tamariu', name: 'Tamariu', short: 'Tamariu', town: 'Palafrugell', lat: 41.9176, lon: 3.2074, facing: 120, open: 50, sea: [41.9172, 3.2095] },
   { id: 'llafranc', name: 'Llafranc', short: 'Llafranc', town: 'Palafrugell', lat: 41.8935, lon: 3.1936, facing: 165, open: 45, sea: [41.8927, 3.1953] },
-  { id: 'calella', name: 'Calella de Palafrugell', short: 'Calella', town: 'Palafrugell', lat: 41.887, lon: 3.183, facing: 150, open: 50, sea: [41.887, 3.1835] },
-  { id: 'fosca', name: 'La Fosca', short: 'La Fosca', town: 'Palamós', lat: 41.857, lon: 3.1428, facing: 160, open: 45, sea: [41.8574, 3.1445] },
+  { id: 'calella', name: 'Calella de Palafrugell', short: 'Calella', town: 'Palafrugell', lat: 41.887, lon: 3.183, facing: 125, open: 50, sea: [41.887, 3.1835] },
+  { id: 'fosca', name: 'La Fosca', short: 'La Fosca', town: 'Palamós', lat: 41.857, lon: 3.1428, facing: 125, open: 45, sea: [41.8574, 3.1445] },
   { id: 'palamos', name: 'Platja Gran', short: 'Palamós', town: 'Palamós', lat: 41.8475, lon: 3.1251, facing: 200, open: 50, sea: [41.8475, 3.1211] },
-  { id: 'santantoni', name: 'Sant Antoni de Calonge', short: 'Sant Antoni', town: 'Calonge', lat: 41.8394, lon: 3.095, facing: 160, open: 65, sea: [41.8416, 3.1006] },
+  { id: 'santantoni', name: 'Sant Antoni de Calonge', short: 'Sant Antoni', town: 'Calonge', lat: 41.8394, lon: 3.095, facing: 145, open: 60, sea: [41.8416, 3.1006] },
   { id: 'santfeliu', name: 'Sant Feliu de Guíxols', short: 'Sant Feliu', town: 'Sant Feliu de Guíxols', lat: 41.7792, lon: 3.0292, facing: 150, open: 45, sea: [41.7792, 3.0317] },
   { id: 'tossa', name: 'Platja Gran de Tossa', short: 'Tossa', town: 'Tossa de Mar', lat: 41.7185, lon: 2.9325, facing: 120, open: 50, sea: [41.7187, 2.9356] },
   { id: 'lloret', name: 'Platja de Lloret', short: 'Lloret', town: 'Lloret de Mar', lat: 41.6975, lon: 2.8455, facing: 155, open: 55, sea: [41.6974, 2.8501] },
@@ -72,7 +72,7 @@ export const WAVE_MODELS = [
   { id: 'gfs', api: 'ncep_gfswave025', name: 'GFS Wave', note: 'EUA · també al Windy' },
   { id: 'dwd', api: 'dwd_ewam', name: 'DWD EWAM', note: 'Alemanya · més fi' },
 ];
-const DATA_VERSION = 3; // apujar-ho si canvia el format de les dades desades
+const DATA_VERSION = 4; // apujar-ho si canvia el format de les dades desades
 
 // ---------- Descàrrega ----------
 export function cachedMarine() {

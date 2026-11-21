@@ -1,15 +1,21 @@
-<!doctype html><meta charset="utf-8"><title>Punts</title>
+<!doctype html><meta charset="utf-8"><title>Punts i orientacions</title>
+<!-- Revisió de les platges: punt `sea` (vermell), platja (blau), línia de cap on mira (vermell) i sector obert (taronja).
+     Obre-ho amb el servidor local: http://localhost:5181/tools/check-points.html  (?z=16 per canviar el zoom, ?b=id per una sola platja) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<style>body{margin:0;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;font:12px sans-serif}div.c{position:relative}div.m{height:235px}b{position:absolute;z-index:999;background:#fff;padding:1px 4px;top:0;left:0}</style>
+<style>body{margin:0;display:grid;grid-template-columns:repeat(2,1fr);gap:2px;font:13px sans-serif}div.c{position:relative}div.m{height:345px}b{position:absolute;z-index:999;background:#fff;padding:1px 4px;top:0;left:0}</style>
 <body><script type="module">
 import { BEACHES } from '../js/marine.js';
-for (const b of BEACHES) {
-  const c = document.createElement('div'); c.className='c'; c.innerHTML=`<b>${b.short} f${b.facing}</b><div class="m"></div>`; document.body.append(c);
-  const m = L.map(c.querySelector('.m'), {zoomControl:false, attributionControl:false}).setView(b.sea, 16);
+const q = new URLSearchParams(location.search), Z = Number(q.get('z') || 15);
+const end = (p, deg, km) => { const f = deg * Math.PI / 180; return [p[0] + km / 111.32 * Math.cos(f), p[1] + km / (111.32 * Math.cos(p[0] * Math.PI / 180)) * Math.sin(f)]; };
+for (const b of BEACHES.filter((x) => !q.get('b') || x.id === q.get('b'))) {
+  const c = document.createElement('div'); c.className = 'c'; c.innerHTML = `<b>${b.short} · mira ${b.facing}° · obert ±${b.open}°</b><div class="m"></div>`; document.body.append(c);
+  const m = L.map(c.querySelector('.m'), { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView(b.sea, Z);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
-  L.circleMarker(b.sea, {radius:5, color:'red'}).addTo(m);
-  L.circleMarker([b.lat,b.lon], {radius:4, color:'blue'}).addTo(m);
-  const f=b.facing*Math.PI/180; L.polyline([b.sea,[b.sea[0]+0.004*Math.cos(f), b.sea[1]+0.004*Math.sin(f)/0.745]],{color:'red'}).addTo(m);
+  const km = 2 ** (15 - Z) * 1.2;
+  L.polygon([b.sea, end(b.sea, b.facing - b.open, km), end(b.sea, b.facing, km), end(b.sea, b.facing + b.open, km)], { color: 'orange', weight: 1, fillOpacity: .15 }).addTo(m);
+  L.polyline([b.sea, end(b.sea, b.facing, km)], { color: 'red' }).addTo(m);
+  L.circleMarker(b.sea, { radius: 5, color: 'red' }).addTo(m);
+  L.circleMarker([b.lat, b.lon], { radius: 4, color: 'blue' }).addTo(m);
 }
 </script>
