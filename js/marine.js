@@ -1,0 +1,239 @@
+// Dades del mar per a nedadors: onades (Open-Meteo Marine) + vent (Open-Meteo, AROME)
+// i un índex de nedada corregit segons cap on mira cada platja.
+import * as store from './store.js';
+
+/**
+ * Platges. `facing`: direcció (graus) cap on mira la platja, és a dir, d'on li pot arribar el mar.
+ * `open`: mitja obertura del sector de mar obert (graus). Valors aproximats, a calibrar.
+ * `sea`: punt on es dibuixa al mapa, uns 150 m mar endins.
+ */
+export const BEACHES = [
+  { id: 'montgo', name: 'Cala Montgó', short: 'Montgó', town: "L'Escala", lat: 42.1055, lon: 3.1665, facing: 80, open: 40, sea: [42.1071, 3.1706] },
+  { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0371, lon: 3.1954, facing: 100, open: 65, sea: [42.0368, 3.1972] },
+  { id: 'sariera', name: 'Sa Riera', short: 'Sa Riera', town: 'Begur', lat: 41.973, lon: 3.2109, facing: 35, open: 50, sea: [41.9739, 3.2123] },
+  { id: 'satuna', name: 'Sa Tuna', short: 'Sa Tuna', town: 'Begur', lat: 41.9588, lon: 3.2324, facing: 55, open: 40, sea: [41.9614, 3.2318] },
+  { id: 'aiguablava', name: 'Aiguablava', short: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 80, open: 40, sea: [41.9345, 3.2178] },
+  { id: 'tamariu', name: 'Tamariu', short: 'Tamariu', town: 'Palafrugell', lat: 41.9176, lon: 3.2074, facing: 100, open: 45, sea: [41.9172, 3.2095] },
+  { id: 'llafranc', name: 'Llafranc', short: 'Llafranc', town: 'Palafrugell', lat: 41.8935, lon: 3.1936, facing: 165, open: 45, sea: [41.8927, 3.1953] },
+  { id: 'calella', name: 'Calella de Palafrugell', short: 'Calella', town: 'Palafrugell', lat: 41.887, lon: 3.183, facing: 150, open: 50, sea: [41.887, 3.1835] },
+  { id: 'fosca', name: 'La Fosca', short: 'La Fosca', town: 'Palamós', lat: 41.857, lon: 3.1428, facing: 160, open: 45, sea: [41.8574, 3.1445] },
+  { id: 'palamos', name: 'Platja Gran', short: 'Palamós', town: 'Palamós', lat: 41.8475, lon: 3.1251, facing: 200, open: 50, sea: [41.8475, 3.1211] },
+  { id: 'santantoni', name: 'Sant Antoni de Calonge', short: 'Sant Antoni', town: 'Calonge', lat: 41.8394, lon: 3.095, facing: 160, open: 65, sea: [41.8416, 3.1006] },
+  { id: 'santfeliu', name: 'Sant Feliu de Guíxols', short: 'Sant Feliu', town: 'Sant Feliu de Guíxols', lat: 41.7792, lon: 3.0292, facing: 150, open: 45, sea: [41.7792, 3.0317] },
+  { id: 'tossa', name: 'Platja Gran de Tossa', short: 'Tossa', town: 'Tossa de Mar', lat: 41.7185, lon: 2.9325, facing: 120, open: 50, sea: [41.7187, 2.9356] },
+  { id: 'lloret', name: 'Platja de Lloret', short: 'Lloret', town: 'Lloret de Mar', lat: 41.6975, lon: 2.8455, facing: 155, open: 55, sea: [41.6974, 2.8501] },
+];
+
+/** Punt del mapa: uns 150 m mar endins davant de la platja (`sea`, revisat sobre el mapa). */
+export function seaPoint(b) {
+  if (b.sea) return b.sea;
+  const f = (b.facing * Math.PI) / 180;
+  return [b.lat + (150 * Math.cos(f)) / 111320, b.lon + (150 * Math.sin(f)) / (111320 * Math.cos((b.lat * Math.PI) / 180))];
+}
+
+export const TZ = 'Europe/Madrid';
+
+/** Nom curt d'una direcció en graus (N, NE, E…). */
+export function windName(deg) {
+  if (deg == null) return '';
+  return ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(deg / 45) % 8];
+}
+const TTL = 60 * 60 * 1000; // els models d'onades s'actualitzen poques vegades al dia: n'hi ha prou amb 1 h
+
+const MARINE = ['wave_height', 'wave_direction', 'wave_period', 'wind_wave_height', 'wind_wave_direction',
+  'swell_wave_height', 'swell_wave_direction', 'swell_wave_period', 'sea_surface_temperature'];
+const WIND = ['wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'weather_code', 'temperature_2m'];
+
+// ---------- Descàrrega ----------
+export function cachedMarine() {
+  const c = store.get('marine', null);
+  // Si la llista de platges ha canviat, les dades desades no serveixen.
+  return c && BEACHES.every((b) => c.beaches?.[b.id]) ? c : null;
+}
+
+export async function fetchMarine({ force = false } = {}) {
+  const cached = cachedMarine();
+  if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
+  const lat = BEACHES.map((b) => b.lat).join(','), lon = BEACHES.map((b) => b.lon).join(',');
+  const common = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=4&cell_selection=sea`;
+  const [m, w] = await Promise.all([
+    getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=${MARINE.join(',')}`),
+    getJson(`https://api.open-meteo.com/v1/forecast?${common}&wind_speed_unit=kmh&hourly=${WIND.join(',')}`),
+  ]);
+  const ma = [].concat(m), wa = [].concat(w);
+  const times = ma[0].hourly.time;
+  const beaches = {};
+  BEACHES.forEach((b, i) => {
+    const M = ma[i].hourly, W = wa[i].hourly;
+    beaches[b.id] = times.map((t, k) => ({
+      t,
+      hs: M.wave_height[k], dir: M.wave_direction[k], per: M.wave_period[k],
+      ww: M.wind_wave_height[k], wwDir: M.wind_wave_direction[k],
+      sw: M.swell_wave_height[k], swDir: M.swell_wave_direction[k], swPer: M.swell_wave_period[k],
+      sst: M.sea_surface_temperature[k],
+      wind: W.wind_speed_10m[k], windDir: W.wind_direction_10m[k], gust: W.wind_gusts_10m[k],
+      code: W.weather_code[k], air: W.temperature_2m[k],
+    }));
+  });
+  const data = { fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches };
+  store.set('marine', data);
+  return data;
+}
+
+async function getJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Open-Meteo ha respost ${r.status}`);
+  return r.json();
+}
+
+// ---------- Anàlisi ----------
+const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; };
+
+/** Quina part de l'onada que ve de `fromDir` entra a la platja (1 = de ple, 0,1 = molt arrecerada). */
+export function exposure(beach, fromDir) {
+  if (fromDir == null) return 1;
+  const d = angDiff(fromDir, beach.facing);
+  if (d <= beach.open) return 1;
+  if (d >= beach.open + 45) return 0.1;
+  return 1 - 0.9 * ((d - beach.open) / 45);
+}
+
+/** Relació del vent amb la platja: 'mar' (bufa cap a la platja), 'terra' (cap al mar) o 'lateral'. */
+export function windRelation(beach, fromDir) {
+  if (fromDir == null) return 'lateral';
+  const d = angDiff(fromDir, beach.facing);
+  if (d <= 60) return 'mar';
+  if (d >= 120) return 'terra';
+  return 'lateral';
+}
+
+/** Onada estimada a la platja (m): components de mar de vent i mar de fons, cadascun amb la seva exposició. */
+export function beachWave(beach, h) {
+  if (h.ww != null || h.sw != null) {
+    const a = (h.ww ?? 0) * exposure(beach, h.wwDir ?? h.dir);
+    const b = (h.sw ?? 0) * exposure(beach, h.swDir ?? h.dir);
+    return Math.sqrt(a * a + b * b);
+  }
+  return h.hs == null ? null : h.hs * exposure(beach, h.dir);
+}
+
+export const LEVELS = [
+  { label: 'Bo per nedar', short: 'Bo', color: '#3ccf7a' },
+  { label: 'Una mica mogut', short: 'Mogut', color: '#f5c542' },
+  { label: 'Mala mar', short: 'Mala mar', color: '#ef5b5b' },
+];
+
+// Llindars (a calibrar). Onada a la platja: verd < 0,3 m · groc 0,3–0,8 m · vermell ≥ 0,8 m.
+export const WAVE_LIMITS = [0.3, 0.8];
+// Vent sostingut (km/h) per passar a groc i a vermell segons d'on bufa. El vermell és només per a vent fort de debò.
+const WIND_LIMITS = { mar: [15, 35], lateral: [20, 38], terra: [25, 40] };
+const GUST_LIMITS = [35, 50];
+
+// Interpolació lineal per trams: pts = [[x, penalització], ...]
+function ramp(x, pts) {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    if (x <= x1) return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }
+  return pts.at(-1)[1];
+}
+const clamp10 = (v) => Math.max(0, Math.min(10, v));
+
+/**
+ * Índex de nedada d'una hora, de 0 (mala mar) a 10 (perfecte), combinant onada i vent.
+ * Cada factor dona una penalització: 3 punts al llindar de groc i 6 al de vermell.
+ * La pitjor compta sencera i la segona hi suma un terç (onada i vent junts empitjoren el mar).
+ * Semàfor: més de 7 = bo, de 4 a 7 = mogut, 4 o menys = mala mar.
+ */
+export function analyze(beach, h) {
+  const bw = beachWave(beach, h);
+  const rel = windRelation(beach, h.windDir);
+  const why = [];
+  const [w0, w1] = WAVE_LIMITS, [v0, v1] = WIND_LIMITS[rel], [g0, g1] = GUST_LIMITS;
+
+  const pWave = bw == null ? 3 : ramp(bw, [[0.1, 0], [w0, 3], [w1, 6], [w1 + 0.6, 10]]);
+  const pWind = Math.max(
+    ramp(h.wind ?? 0, [[5, 0], [v0, 3], [v1, 6], [v1 + 15, 10]]),
+    ramp(h.gust ?? 0, [[20, 0], [g0, 3], [g1, 6], [g1 + 20, 10]]),
+  );
+  const hi = Math.max(pWave, pWind), lo = Math.min(pWave, pWind);
+  let score = clamp10(10 - hi - lo / 3);
+
+  if (pWave >= 6) why.push('onada alta'); else if (pWave >= 3) why.push('una mica d\x27onada');
+  if (pWind >= 6) why.push(rel === 'terra' ? 'vent fort de terra (et pot allunyar)' : 'vent fort');
+  else if (pWind >= 3) why.push(rel === 'mar' ? 'vent de mar' : 'vent moderat');
+  if (h.code >= 95) { score = 0; why.push('tempesta'); }
+
+  const levelOf = (sc) => (sc > 7 ? 0 : sc > 4 ? 1 : 2);
+  if (!why.length && levelOf(score) > 0) why.push('onada i vent junts');
+  return {
+    level: levelOf(score),
+    score: Math.round(score * 10) / 10,
+    waveScore: Math.round(clamp10(10 - pWave)),
+    windScore: Math.round(clamp10(10 - pWind)),
+    windLevel: levelOf(10 - pWind),
+    beachHs: bw, rel, why,
+  };
+}
+
+// ---------- Hores locals ----------
+const fmtParts = new Intl.DateTimeFormat('ca', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' });
+export function localParts(t) {
+  const p = Object.fromEntries(fmtParts.formatToParts(t * 1000).map((x) => [x.type, x.value]));
+  return { day: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) };
+}
+export const todayKey = () => localParts(Date.now() / 1000).day;
+export function dayKeyOffset(offset) { return localParts(Date.now() / 1000 + offset * 86400).day; }
+
+export function swimWindow() {
+  return store.get('swimWindow', { from: 6, to: 12 });
+}
+
+/**
+ * Millor finestra de 2 hores dins la franja habitual (per defecte 6–12 h) d'un dia.
+ * Retorna null si la franja d'aquell dia ja ha passat.
+ */
+export function bestWindow(beach, hours, day, len = 2) {
+  const { from, to } = swimWindow();
+  const now = Date.now() / 1000;
+  const cand = hours.filter((h) => { const p = localParts(h.t); return p.day === day && p.hour >= from && p.hour < to && h.t + 3600 > now; });
+  if (cand.length < len) return null;
+  let best = null;
+  for (let i = 0; i + len <= cand.length; i++) {
+    const win = cand.slice(i, i + len);
+    if (win[len - 1].t - win[0].t !== (len - 1) * 3600) continue;
+    const an = win.map((h) => analyze(beach, h));
+    const level = Math.max(...an.map((a) => a.level));
+    const score = level * 100 - an.reduce((s, a) => s + a.score, 0); // menys és millor
+    if (!best || score < best.score) best = { start: win[0].t, end: win[len - 1].t + 3600, level, score, index: Math.min(...an.map((a) => a.score)), hs: an[0].beachHs, wind: win[0].wind, rel: an[0].rel };
+  }
+  return best;
+}
+
+/** Resum per a la targeta de la pantalla principal. */
+export function summary(data) {
+  const favs = store.get('favBeaches', []);
+  const pool = favs.length ? BEACHES.filter((b) => favs.includes(b.id)) : BEACHES;
+  const { to } = swimWindow();
+  const nowH = localParts(Date.now() / 1000).hour;
+  const dayOff = nowH < to - 1 ? 0 : 1;
+  const day = dayKeyOffset(dayOff);
+  let best = null;
+  for (const b of pool) {
+    const w = bestWindow(b, data.beaches[b.id], day);
+    if (w && (!best || w.score < best.w.score)) best = { b, w };
+  }
+  const sst = avg(BEACHES.map((b) => nearestHour(data.beaches[b.id])?.sst));
+  return { best, dayLabel: dayOff ? 'Demà' : 'Avui', sst };
+}
+
+export function nearestHour(hours) {
+  const now = Date.now() / 1000;
+  return hours.findLast((h) => h.t <= now) || hours[0];
+}
+
+function avg(xs) {
+  const v = xs.filter((x) => x != null);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}

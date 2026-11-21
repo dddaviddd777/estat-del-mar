@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estat del Mar</title>
+<meta name="description" content="Estat del mar per nedar a les platges de la Costa Brava: onades, vent i millor hora.">
+<meta name="apple-mobile-web-app-title" content="Estat del Mar">
+<meta name="theme-color" content="#0f3556">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/mar.css">
+</head>
+<body data-sky="sea">
+<div class="sky" aria-hidden="true"></div>
+
+<div class="app">
+  <header class="top">
+    <span class="icon-btn logo" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 14c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 19c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg>
+    </span>
+    <h1 class="page-title">Estat del Mar<small>Costa Brava</small></h1>
+    <button class="icon-btn" id="refreshBtn" aria-label="Actualitzar" title="Actualitzar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+    </button>
+  </header>
+  <div class="updated" id="updated">&nbsp;</div>
+
+  <div id="banner"></div>
+
+  <section class="card map-card">
+    <div id="map" role="region" aria-label="Mapa de platges"></div>
+    <div class="timebar">
+      <div class="time-row">
+        <strong id="timeLabel">—</strong>
+        <div class="chips"></div>
+      </div>
+      <input type="range" id="time" min="0" max="0" value="0" aria-label="Hora de la previsió">
+    </div>
+    <div class="legend">
+      <span><i style="background:#3ccf7a"></i>Bo · menys de 0,3 m</span>
+      <span><i style="background:#f5c542"></i>Mogut · 0,3–0,8 m</span>
+      <span><i style="background:#ef5b5b"></i>Mala mar · més de 0,8 m o vent fort</span>
+      <span class="legend-note">Cercle: onada a la platja (m), pintat segons onada + vent · Pastilla de la dreta: vent (km/h), la fletxa diu cap on bufa i el color, com de fort és</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Platges <span id="listHint"></span></h2>
+    <ul class="beaches" id="beaches"></ul>
+  </section>
+
+  <footer class="foot">
+    Onades: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a> (models de Météo-France, ECMWF i altres, els mateixos que fa servir el Windy) · Vent: AROME de Météo-France<br>
+    Mapa: © OpenStreetMap<br>
+    L'onada a cada platja és una <b>estimació</b> a partir de la previsió mar endins i de l'orientació de la platja. És orientativa: mira sempre el mar abans d'entrar i no nedis sol.
+  </footer>
+</div>
+
+<div class="sheet" id="detail" hidden>
+  <div class="sheet-panel sea-panel" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="sheet-head">
+      <div class="d-title"><h3 id="dTitle"></h3><small id="dTown"></small></div>
+      <button class="icon-btn" id="dStar" aria-label="Preferida"></button>
+      <button class="icon-btn" id="dClose" aria-label="Tancar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="dBody"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

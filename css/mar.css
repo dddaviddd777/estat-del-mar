@@ -1,0 +1,84 @@
+body[data-sky="sea"] { --sky1: #0f3556; --sky2: #2f78a8; }
+
+.page-title { flex: 1; font-size: 20px; font-weight: 500; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+.page-title small { display: block; font-size: 12.5px; font-weight: 400; color: var(--soft); letter-spacing: .04em; }
+.logo { pointer-events: none; }
+a.icon-btn { color: inherit; text-decoration: none; }
+
+.map-card { padding: 0; overflow: hidden; }
+#map { height: 440px; background: #aad3df; }
+@media (max-width: 380px) { #map { height: 420px; } }
+.timebar { padding: 12px 14px 4px; }
+.time-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 8px; margin-bottom: 6px; }
+.time-row strong { font-weight: 500; font-size: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font-size: 12.5px; padding: 4px 10px; border-radius: 12px; background: rgba(255, 255, 255, .16); white-space: nowrap; }
+.chips button:active { background: rgba(255, 255, 255, .3); }
+.chips button.on { background: #fff; color: #0f3556; font-weight: 500; }
+#time { width: 100%; accent-color: #fff; height: 28px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 4px 14px 12px; font-size: 12px; color: var(--soft); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.legend-note { flex-basis: 100%; color: var(--faint); }
+
+/* Marcadors del mapa */
+.bm-wrap { background: none; border: 0; }
+.bm { position: relative; width: 0; height: 0; }
+.bm .pill { position: absolute; display: flex; align-items: center; gap: 6px; height: 24px; padding-right: 3px; border-radius: 12px;
+  background: #fff; color: #0b1d2c; white-space: nowrap; cursor: pointer; font: 500 12px Outfit, system-ui, sans-serif;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
+.bm .pill b { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--c); display: grid; place-items: center;
+  font-weight: 600; font-size: 10.5px; letter-spacing: -.02em; box-shadow: inset 0 0 0 1.5px rgba(11, 29, 44, .25); }
+.bm .pill .wind { flex: none; box-sizing: border-box; min-width: 40px; height: 18px; padding: 0 5px 0 3px; border-radius: 9px; background: var(--w);
+  display: flex; align-items: center; justify-content: center; gap: 2px; font-weight: 600; font-size: 11.5px; }
+.bm .pill .wind svg { width: 12px; height: 12px; flex: none; }
+.bm .pill .wind path { fill: #0b1d2c; }
+.bm.sel .pill { outline: 3px solid #0b1d2c; outline-offset: 1px; }
+.leaflet-marker-icon.bm-wrap:hover, .leaflet-marker-icon.bm-wrap:focus { z-index: 2000 !important; }
+.leaflet-container { font-family: Outfit, system-ui, sans-serif; }
+@media (prefers-color-scheme: dark) {
+  #map .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9); }
+}
+.leaflet-control-attribution { font-size: 9.5px; }
+
+/* Llista de platges */
+.beaches { list-style: none; }
+.beaches li { display: flex; align-items: center; border-top: 1px solid rgba(255, 255, 255, .12); }
+.beaches li:first-child { border-top: 0; }
+.brow { flex: 1; min-width: 0; display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; text-align: left; }
+.brow .dot { width: 12px; height: 12px; border-radius: 50%; }
+.bname { min-width: 0; font-size: 15.5px; }
+.bname small, .bvals small { display: block; font-size: 12px; color: var(--soft); }
+.bname .best { color: var(--ink); }
+.bvals { text-align: right; font-size: 15px; white-space: nowrap; }
+.star { width: 38px; height: 38px; display: grid; place-items: center; color: var(--faint); flex: none; }
+.star.on { color: #ffd34d; }
+
+/* Fitxa de platja */
+.sea-panel { background: #0f2a45; color: #fff; }
+.sea-panel .icon-btn { background: rgba(255, 255, 255, .1); color: #fff; }
+.d-title { flex: 1; min-width: 0; }
+.d-title h3 { font-size: 20px; font-weight: 500; }
+.d-title small { color: rgba(255, 255, 255, .65); font-size: 13px; }
+.d-now { display: flex; gap: 12px; align-items: center; background: rgba(255, 255, 255, .07); border-radius: 16px; padding: 12px; margin: 6px 0 12px; }
+.d-now .lvl { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #0b1d2c; font-weight: 600; font-size: 13px; }
+.d-now p { font-size: 14.5px; line-height: 1.4; }
+.d-now p small { display: block; color: rgba(255, 255, 255, .65); font-size: 12.5px; margin-top: 2px; }
+.d-now .lvl.score { width: 58px; height: 58px; font-size: 18px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.d-now .lvl.score small { font-size: 10.5px; font-weight: 500; opacity: .75; margin-top: 1px; }
+.d-score { background: rgba(255, 255, 255, .07); border-radius: 16px; padding: 10px 12px; margin-bottom: 12px; }
+.d-score .sb { display: grid; grid-template-columns: 52px 1fr 40px; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
+.d-score .sb i { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.d-score .sb i b { display: block; height: 100%; border-radius: 4px; }
+.d-score .sb em { font-style: normal; text-align: right; color: rgba(255, 255, 255, .85); }
+.d-score p { font-size: 12px; color: rgba(255, 255, 255, .6); line-height: 1.45; margin-top: 6px; }
+.d-windows { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.d-windows div { background: rgba(255, 255, 255, .07); border-radius: 14px; padding: 10px 12px; font-size: 13px; color: rgba(255, 255, 255, .75); }
+.d-windows b { display: block; color: #fff; font-size: 17px; font-weight: 500; margin-top: 2px; }
+.d-windows i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.d-chart { overflow-x: auto; margin: 0 -16px; padding: 0 8px; scrollbar-width: thin; }
+.d-chart svg { display: block; }
+.d-h { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: rgba(255, 255, 255, .6); margin: 12px 0 6px; font-weight: 500; }
+.d-facts { list-style: none; font-size: 14px; line-height: 1.5; }
+.d-facts li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.d-facts li span:last-child { text-align: right; color: rgba(255, 255, 255, .85); }
+.d-note { font-size: 12px; color: rgba(255, 255, 255, .55); margin-top: 12px; line-height: 1.5; }
