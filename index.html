@@ -44,10 +44,10 @@
       <input type="range" id="time" min="0" max="0" value="0" aria-label="Hora de la previsió">
     </div>
     <div class="legend">
-      <span><i style="background:#3ccf7a"></i>Bo · menys de 0,3 m</span>
-      <span><i style="background:#f5c542"></i>Mogut · 0,3–0,8 m</span>
-      <span><i style="background:#ef5b5b"></i>Mala mar · més de 0,8 m o vent fort</span>
-      <span class="legend-note">Cercle: onada a la platja (m), pintat segons onada + vent · Pastilla de la dreta: vent (km/h), la fletxa diu cap on bufa i el color, com de fort és</span>
+      <span class="lg-row"><b class="lg-sc" style="background:#3ccf7a">8,5</b><span>Nota per nedar, de 0 a 10: <span class="nw"><i style="background:#3ccf7a"></i>bo</span> <span class="nw"><i style="background:#f5c542"></i>mogut</span> <span class="nw"><i style="background:#ef5b5b"></i>mala mar</span></span></span>
+      <span class="lg-row"><b class="lg-wv">0,3<small>m</small></b>Onada a la platja; la fletxa, cap on va</span>
+      <span class="lg-row"><b class="lg-wind">12</b>Vent (km/h); la fletxa, cap on bufa, i el color, com de fort és</span>
+      <span class="legend-note">Mantén premut el mapa (o clic dret) per consultar qualsevol punt.</span>
     </div>
   </section>
 
@@ -152,6 +152,8 @@
       <li><b>Vent</b>: model AROME de Météo-France, molt detallat a la costa.</li>
       <li><b>Boies</b>: Cap de Begur en directe. Cada hora es comparen el Cap de Begur, el Cap de Creus i la Tordera amb els models per saber quin l'encerta més.</li>
       <li>Les orientacions de cada platja són aproximades i les anem calibrant amb el que trobeu a l'aigua.</li>
+      <li><b>Etiquetes del mapa</b>: el cercle de color és la nota per nedar (l'únic amb el color del semàfor); la pastilla blava, l'onada a la platja en metres i cap on va; la de la dreta, el vent.</li>
+      <li><b>Qualsevol punt</b>: mantén premut el mapa (o clic dret a l'ordinador) i surt la mateixa fitxa per a aquell punt. Es calcula com a mar obert; si és a la vora d'una cala, tria cap on mira la costa i l'onada es corregeix com a les platges. Queda marcat fins que l'esborris.</li>
     </ul>
 
     <h4 id="h-diccionari">7. Diccionari</h4>

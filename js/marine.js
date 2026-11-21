@@ -65,23 +65,47 @@ export function cachedMarine() {
   return c && c.v === DATA_VERSION && BEACHES.every((b) => c.beaches?.[b.id]) ? c : null;
 }
 
-export async function fetchMarine({ force = false } = {}) {
-  const cached = cachedMarine();
-  if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
-  const lat = BEACHES.map((b) => b.lat).join(','), lon = BEACHES.map((b) => b.lon).join(',');
-  const common = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=4&cell_selection=sea`;
+/** Les tres crides (onades, vent, altres models) per a una llista de punts. */
+async function download(lats, lons) {
+  const common = `latitude=${lats.join(',')}&longitude=${lons.join(',')}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=4&cell_selection=sea`;
   const [m, w, x] = await Promise.all([
     getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=${MARINE.join(',')}`),
     getJson(`https://api.open-meteo.com/v1/forecast?${common}&wind_speed_unit=kmh&hourly=${WIND.join(',')}`),
     // El contrast de models és opcional: si falla, l'app funciona igual.
     getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=wave_height,wave_direction&models=${WAVE_MODELS.map((o) => o.api).join(',')}`).catch(() => null),
   ]);
-  const ma = [].concat(m), wa = [].concat(w), xa = x ? [].concat(x) : null;
+  return { ma: [].concat(m), wa: [].concat(w), xa: x ? [].concat(x) : null };
+}
+
+export async function fetchMarine({ force = false } = {}) {
+  const cached = cachedMarine();
+  if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
+  const { ma, wa, xa } = await download(BEACHES.map((b) => b.lat), BEACHES.map((b) => b.lon));
   const times = ma[0].hourly.time;
   const beaches = {};
-  BEACHES.forEach((b, i) => {
-    const M = ma[i].hourly, W = wa[i].hourly, X = xa?.[i]?.hourly;
-    beaches[b.id] = times.map((t, k) => ({
+  BEACHES.forEach((b, i) => { beaches[b.id] = toHours(ma[i].hourly, wa[i].hourly, xa?.[i]?.hourly); });
+  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches };
+  store.set('marine', data);
+  return data;
+}
+
+/**
+ * Previsió d'un punt qualsevol del mapa (mateix format que una platja). Es desa només en memòria, 1 h.
+ * `land`: el punt és a terra (alçada del terreny > 2 m); llavors l'onada és la del mar més proper.
+ */
+const pointCache = new Map();
+export async function fetchPoint(lat, lon) {
+  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const c = pointCache.get(key);
+  if (c && Date.now() - c.fetchedAt < TTL) return c;
+  const { ma, wa, xa } = await download([lat.toFixed(4)], [lon.toFixed(4)]);
+  const p = { fetchedAt: Date.now(), hours: toHours(ma[0].hourly, wa[0].hourly, xa?.[0]?.hourly), land: (wa[0].elevation ?? 0) > 2 };
+  pointCache.set(key, p);
+  return p;
+}
+
+function toHours(M, W, X) {
+  return M.time.map((t, k) => ({
       t,
       hs: M.wave_height[k], dir: M.wave_direction[k], per: M.wave_period[k],
       ww: M.wind_wave_height[k], wwDir: M.wind_wave_direction[k],
@@ -92,11 +116,7 @@ export async function fetchMarine({ force = false } = {}) {
       wind: W.wind_speed_10m[k], windDir: W.wind_direction_10m[k], gust: W.wind_gusts_10m[k],
       code: W.weather_code[k], air: W.temperature_2m[k],
       mod: X ? Object.fromEntries(WAVE_MODELS.map((o) => [o.id, [X[`wave_height_${o.api}`]?.[k] ?? null, X[`wave_direction_${o.api}`]?.[k] ?? null]])) : null,
-    }));
-  });
-  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches };
-  store.set('marine', data);
-  return data;
+  }));
 }
 
 async function getJson(url) {
@@ -114,7 +134,7 @@ const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); ret
  * que una onada curta no toca: el sector obert s'eixampla fins a 20° i la part que s'escola puja.
  */
 export function exposure(beach, fromDir, T = null) {
-  if (fromDir == null) return 1;
+  if (fromDir == null || beach.facing == null) return 1; // punt sense orientació: mar obert, entra tot
   const d = angDiff(fromDir, beach.facing);
   const open = beach.open + (T ? Math.max(0, Math.min(20, (T - 6) * 5)) : 0);
   const leak = T >= 9 ? 0.2 : 0.1;
@@ -171,7 +191,7 @@ export function seaState(beach, h) {
 
 /** Relació del vent amb la platja: 'mar' (bufa cap a la platja), 'terra' (cap al mar) o 'lateral'. */
 export function windRelation(beach, fromDir) {
-  if (fromDir == null) return 'lateral';
+  if (fromDir == null || beach.facing == null) return 'lateral';
   const d = angDiff(fromDir, beach.facing);
   if (d <= 60) return 'mar';
   if (d >= 120) return 'terra';

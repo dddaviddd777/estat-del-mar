@@ -1,5 +1,5 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint } from './marine.js';
 import * as store from './store.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib } from './buoy.js';
 
@@ -56,6 +56,7 @@ async function load(force = false) {
   try {
     data = await fetchMarine({ force });
     offline = false;
+    if (point) loadPoint();
     const keep = idx > nowIdx ? data.times[idx] : null;
     setNow();
     if (keep) { const k = data.times.indexOf(keep); if (k >= 0) idx = k; }
@@ -126,7 +127,7 @@ function initMap() {
     if (!window.L) $('map').innerHTML = '<p style="padding:20px;color:#0b1d2c">El mapa necessita connexió.</p>';
     return;
   }
-  map = L.map('map', { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25 });
+  map = L.map('map', { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25, tapHold: true });
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 17,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -144,7 +145,7 @@ function initMap() {
   new Sst({ position: 'topleft' }).addTo(map);
   // Les etiquetes surten cap a la dreta (mar): deixem-hi lloc perquè les de més a l'est no quedin tallades.
   const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))),
-    wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [90, 24] });
+    wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [170, 24] });
   fitCoast();
   // En passar de mòbil a ordinador (o al revés) el mapa canvia molt de mida: el tornem a encaixar.
   wide.addEventListener('change', () => setTimeout(() => { map.invalidateSize(); fitCoast(); }, 50));
@@ -160,15 +161,43 @@ function initMap() {
       .addTo(map);
   }
   map.on('zoomend resize', () => renderMarkers());
+  map.on('moveend', () => renderPointMarker());
   document.fonts?.ready.then(() => renderMarkers());
+  // Mantenir premut (mòbil, tapHold de Leaflet) o clic dret (ordinador): consulta aquell punt.
+  let lastPick = 0;
+  map.on('contextmenu', (e) => {
+    e.originalEvent?.preventDefault?.();
+    if (Date.now() - lastPick < 800) return; // alguns mòbils l'envien dues vegades
+    lastPick = Date.now();
+    pickPoint(e.latlng.lat, e.latlng.lng);
+  });
+  const sp = store.get('point', null);
+  if (sp && !point) pickPoint(sp.lat, sp.lon, { open: false, facing: sp.facing ?? null });
 }
 
-// Mida de cada etiqueta (cercle + nom + fletxa del vent), per poder-les col·locar sense que es trepitgin.
-const PILL_H = 24, R = PILL_H / 2, WIND_W = 40; // WIND_W: amplada de la pastilla del vent
+// Mida de cada etiqueta (nota + nom + onada + vent), per poder-les col·locar sense que es trepitgin.
+// Ha de coincidir amb .bm .pill a css/mar.css.
+const PILL_H = 26, R = PILL_H / 2, WAVE_W = 52, WIND_W = 40;
 const measureCtx = document.createElement('canvas').getContext('2d');
 function pillWidth(b) {
   measureCtx.font = '500 12px Outfit, system-ui, sans-serif';
-  return PILL_H + 6 + measureCtx.measureText(b.short).width + 6 + WIND_W + 3;
+  return PILL_H + 5 + measureCtx.measureText(b.short).width + 5 + WAVE_W + 4 + WIND_W + 3;
+}
+
+/**
+ * Etiqueta d'una platja (o del punt triat). Cada dada té la seva forma, perquè no es confonguin:
+ * cercle de color = nota per nedar (l'únic amb el color del semàfor) · pastilla blava = onada a la platja
+ * i cap on va · pastilla del vent = km/h, cap on bufa i color segons la força.
+ */
+const ARROW = '<svg viewBox="0 0 18 18" aria-hidden="true" style="transform:rotate(ROTdeg)"><path d="M9 1l5 12-5-3-5 3z"/></svg>';
+function pillHtml(b, h, a) {
+  const score = a.score >= 9.95 ? '10' : nf1.format(a.score);
+  const wdir = a.sea?.dir ?? h.dir;
+  const waveRot = ((wdir ?? 0) + 180) % 360, windRot = ((h.windDir ?? 0) + 180) % 360;
+  return `<b class="sc" style="--c:${LEVELS[a.level].color}" title="Nota per nedar: ${nf1.format(a.score)} de 10 (${LEVELS[a.level].label.toLowerCase()})">${score}</b>
+    <span class="nm">${b.short}</span>
+    <span class="wv" title="Onada a la platja: ${m(a.beachHs)} m${wdir != null ? `, ve del ${windName(wdir)}` : ''}">${wdir != null ? ARROW.replace('ROT', waveRot) : ''}${a.beachHs == null ? '—' : m(a.beachHs)}<small>m</small></span>
+    <span class="wind" style="--w:${LEVELS[a.windLevel].color}" title="Vent ${REL[a.rel]}: ${h.wind == null ? '—' : Math.round(h.wind)} km/h del ${windName(h.windDir)}">${ARROW.replace('ROT', windRot)}${h.wind == null ? '—' : Math.round(h.wind)}</span>`;
 }
 
 /**
@@ -248,17 +277,95 @@ function renderMarkers() {
   for (const b of BEACHES) {
     const h = data.beaches[b.id][idx];
     const a = analyze(b, h);
-    const rot = ((h.windDir ?? 0) + 180) % 360;
     const { dx, dy } = off[b.id];
-    const html = `<div class="bm ${selected === b.id ? 'sel' : ''}" style="--c:${LEVELS[a.level].color}">
-        <span class="pill" style="left:${(dx - R).toFixed(1)}px;top:${(dy - R).toFixed(1)}px">
-          <b title="Onada a la platja">${a.beachHs == null ? '—' : m(a.beachHs)}</b>${b.short}
-          <span class="wind" style="--w:${LEVELS[a.windLevel].color}" title="Vent ${REL[a.rel]}">
-            <svg viewBox="0 0 18 18" style="transform:rotate(${rot}deg)" aria-hidden="true"><path d="M9 1l5 12-5-3-5 3z"/></svg>${h.wind == null ? '—' : Math.round(h.wind)}
-          </span>
-        </span></div>`;
+    const html = `<div class="bm ${selected === b.id ? 'sel' : ''}">
+        <span class="pill" style="left:${(dx - R).toFixed(1)}px;top:${(dy - R).toFixed(1)}px">${pillHtml(b, h, a)}</span></div>`;
     markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
   }
+  renderPointMarker();
+}
+
+// ---------- Punt triat al mapa (mantenint premut o amb clic dret) ----------
+// Es calcula com una platja més, però sense orientació (mar obert) fins que l'usuari diu cap on mira la costa.
+const POINT_ID = 'punt';
+let point = null;      // { b, hours, land, err }
+let pointMarker = null;
+
+function pointBeach(lat, lon, facing = null) {
+  return { id: POINT_ID, custom: true, name: 'Punt triat', short: 'Punt', town: `${lat.toFixed(3)} N · ${lon.toFixed(3)} E`,
+    lat, lon, facing, open: 50, sea: [lat, lon] };
+}
+const getBeach = (id) => (id === POINT_ID ? point?.b : BEACHES.find((x) => x.id === id));
+// Hores del punt alineades amb les de les platges (la barra de temps fa servir el mateix índex).
+const hoursOf = (b) => (b.custom ? point?.hours : data.beaches[b.id]);
+
+async function pickPoint(lat, lon, { open = true, facing = null } = {}) {
+  point = { b: pointBeach(lat, lon, facing), hours: null };
+  store.set('point', { lat, lon, facing });
+  renderPointMarker();
+  if (open) openDetail(POINT_ID);
+  await loadPoint();
+}
+
+async function loadPoint() {
+  if (!point || !data) return;
+  const p = point;
+  try {
+    const r = await fetchPoint(p.b.lat, p.b.lon);
+    const byT = new Map(r.hours.map((h) => [h.t, h]));
+    p.hours = data.times.map((t) => byT.get(t) ?? { t });
+    p.land = r.land; p.err = null;
+  } catch (e) { p.err = e.message; }
+  if (point !== p) return; // mentrestant n'han triat un altre
+  renderPointMarker();
+  if (selected === POINT_ID) renderDetail();
+}
+
+function setPointFacing(f) {
+  if (!point) return;
+  point.b.facing = f;
+  store.set('point', { lat: point.b.lat, lon: point.b.lon, facing: f });
+  renderPointMarker();
+  renderDetail();
+}
+
+function removePoint() {
+  if (pointMarker) { pointMarker.remove(); pointMarker = null; }
+  point = null;
+  store.set('point', undefined);
+  if (selected === POINT_ID) closeDetail();
+}
+
+function renderPointMarker() {
+  if (!map || !point) return;
+  const b = point.b, h = point.hours?.[idx];
+  const a = h && h.hs !== undefined ? analyze(b, h) : null;
+  const body = a ? pillHtml(b, h, a) : `<span class="nm" style="padding:0 8px">${point.err ? 'Sense dades' : 'Carregant…'}</span>`;
+  // L'etiqueta surt a la dreta del punt; si no hi cap, a l'esquerra.
+  const w = a ? pillWidth(b) : 90;
+  const left = map.latLngToContainerPoint([b.lat, b.lon]).x + 12 + w > map.getSize().x - 4 ? -12 - w : 12;
+  const html = `<div class="bm pt ${selected === POINT_ID ? 'sel' : ''}"><i class="pt-dot"></i>
+    <span class="pill" style="left:${left}px;top:${-R}px">${body}</span></div>`;
+  const icon = L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] });
+  if (!pointMarker) {
+    pointMarker = L.marker([b.lat, b.lon], { icon, keyboard: true, title: 'Punt triat', zIndexOffset: 1000 })
+      .on('click', () => openDetail(POINT_ID)).addTo(map);
+  } else pointMarker.setLatLng([b.lat, b.lon]).setIcon(icon);
+}
+
+// Bloc de la fitxa del punt: cap on mira la costa (per corregir l'onada) i esborrar-lo.
+const FACINGS = [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SO', 225], ['O', 270], ['NO', 315]];
+function pointBlock(b) {
+  const chips = [['Mar obert', null], ...FACINGS].map(([lbl, f]) =>
+    `<button data-facing="${f ?? ''}" class="${b.facing === f ? 'on' : ''}">${lbl}</button>`).join('');
+  return `<div class="d-point">
+    <p>${b.facing == null
+      ? 'Es calcula com a <b>mar obert</b>: l\x27onada entra sencera, vingui d\x27on vingui. Si el punt és a la vora d\x27una cala o platja, tria cap on mira la costa i l\x27app hi aplicarà la correcció d\x27orientació.'
+      : `La costa mira al <b>${windName(b.facing)}</b>: l'onada que ve d'altres direccions arriba reduïda, com a les platges.`}</p>
+    <div class="dir-chips" role="group" aria-label="Cap on mira la costa">${chips}</div>
+    ${point?.land ? '<p class="d-warn">Aquest punt sembla a terra: l\x27onada és la del mar més proper.</p>' : ''}
+    <button class="link-btn" data-del-point>Esborra el punt del mapa</button>
+  </div>`;
 }
 
 function sortedBeaches() {
@@ -384,7 +491,8 @@ function openDetail(id) {
   renderDetail();
   renderMarkers();
   // Al mòbil la fitxa tapa mig mapa: hi centrem la platja. A l'ordinador el mapa queda sencer al costat.
-  if (map && !wide.matches) map.panTo(seaPoint(BEACHES.find((x) => x.id === id)));
+  const b = getBeach(id);
+  if (map && b && !b.custom && !wide.matches) map.panTo(seaPoint(b)); // el punt triat ja és on l'usuari mirava
 }
 function closeDetail() { $('detail').hidden = true; selected = null; renderMarkers(); }
 
@@ -441,17 +549,24 @@ function sentence(b, h, a) {
 }
 
 function renderDetail() {
-  const b = BEACHES.find((x) => x.id === selected);
+  const b = getBeach(selected);
   if (!b || !data) return;
-  const hours = data.beaches[b.id];
-  const h = hours[idx];
-  const a = analyze(b, h);
+  const hours = hoursOf(b);
   const favs = store.get('favBeaches', []);
   $('dTitle').textContent = b.name;
-  $('dTown').textContent = `${b.town} · mira al ${windName(b.facing)}`;
-  $('dStar').innerHTML = starSvg(favs.includes(b.id));
-  $('dStar').style.color = favs.includes(b.id) ? '#ffd34d' : '';
-  $('dStar').onclick = () => toggleFav(b.id);
+  $('dTown').textContent = `${b.town} · ${b.facing == null ? 'mar obert' : `${b.custom ? 'la costa ' : ''}mira al ${windName(b.facing)}`}`;
+  $('dStar').hidden = !!b.custom;
+  if (!b.custom) {
+    $('dStar').innerHTML = starSvg(favs.includes(b.id));
+    $('dStar').style.color = favs.includes(b.id) ? '#ffd34d' : '';
+    $('dStar').onclick = () => toggleFav(b.id);
+  }
+  const h = hours?.[idx];
+  if (!h || h.hs === undefined) {
+    $('dBody').innerHTML = `${b.custom ? pointBlock(b) : ''}<p class="d-note" style="margin-top:14px">${point?.err ? `No s'han pogut carregar les dades d'aquest punt: ${point.err}` : 'Carregant les dades del punt…'}</p>`;
+    return;
+  }
+  const a = analyze(b, h);
 
   const wins = [0, 1].map((off) => {
     const w = bestWindow(b, hours, dayKeyOffset(off));
@@ -473,7 +588,7 @@ function renderDetail() {
   const br = buoy?.reading;
   if (br?.hs != null) facts.push([`Boia ${BUOY.name}`, `${m(br.hs)} m del ${windName(br.dir)} · ${hh(br.t)} h (mesurat, mar obert)`]);
 
-  $('dBody').innerHTML = `
+  $('dBody').innerHTML = `${b.custom ? pointBlock(b) : ''}
     <div class="d-now">
       <div class="lvl score" style="background:${LEVELS[a.level].color}" aria-label="Índex de nedada ${nf1.format(a.score)} sobre 10">${nf1.format(a.score)}<small>/10</small></div>
       <p><b>${LEVELS[a.level].label}</b> · ${dayLabel(h.t)} ${hhmm(h.t)}<br>${sentence(b, h, a)}
@@ -629,3 +744,10 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 load();
+
+// Fitxa del punt triat: cap on mira la costa i esborrar-lo.
+$('dBody').addEventListener('click', (e) => {
+  const f = e.target.closest('[data-facing]');
+  if (f) return setPointFacing(f.dataset.facing === '' ? null : Number(f.dataset.facing));
+  if (e.target.closest('[data-del-point]')) removePoint();
+});
