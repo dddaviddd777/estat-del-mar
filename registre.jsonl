@@ -13,3 +13,4 @@
 {"boia":"begur","t":1795258800,"hs":0.59,"dir":201,"tp":5.5,"sst":17.2,"m":{"main":0.54,"ecmwf":0.64,"gfs":0.42,"dwd":0.62},"msst":17,"m24":null}
 {"boia":"tordera","t":1795258800,"hs":0.38,"dir":160,"tp":3.2,"sst":17.6,"m":{"main":0.28,"ecmwf":0.36,"gfs":0.36,"dwd":0.3},"msst":17.7,"m24":null}
 {"boia":"begur","t":1795266000,"hs":0.59,"dir":197,"tp":3.3,"sst":17.2,"m":{"main":0.7,"ecmwf":0.68,"gfs":0.62,"dwd":0.78},"msst":17,"m24":null}
+{"boia":"begur","t":1795269600,"hs":0.7,"dir":202,"tp":3.3,"sst":17.2,"m":{"main":0.72,"ecmwf":0.74,"gfs":0.68,"dwd":0.74},"msst":17.1,"m24":null}
