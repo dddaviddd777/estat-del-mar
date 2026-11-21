@@ -12,7 +12,7 @@ export const BEACHES = [
   { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0371, lon: 3.1954, facing: 100, open: 65, sea: [42.0368, 3.1972] },
   { id: 'sariera', name: 'Sa Riera', short: 'Sa Riera', town: 'Begur', lat: 41.973, lon: 3.2109, facing: 35, open: 50, sea: [41.9739, 3.2123] },
   { id: 'satuna', name: 'Sa Tuna', short: 'Sa Tuna', town: 'Begur', lat: 41.9588, lon: 3.2324, facing: 55, open: 40, sea: [41.9614, 3.2318] },
-  { id: 'aiguablava', name: 'Aiguablava', short: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 80, open: 40, sea: [41.9345, 3.2178] },
+  { id: 'aiguablava', name: 'Aiguablava', short: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 15, open: 30, sea: [41.9351, 3.2165] },
   { id: 'tamariu', name: 'Tamariu', short: 'Tamariu', town: 'Palafrugell', lat: 41.9176, lon: 3.2074, facing: 100, open: 45, sea: [41.9172, 3.2095] },
   { id: 'llafranc', name: 'Llafranc', short: 'Llafranc', town: 'Palafrugell', lat: 41.8935, lon: 3.1936, facing: 165, open: 45, sea: [41.8927, 3.1953] },
   { id: 'calella', name: 'Calella de Palafrugell', short: 'Calella', town: 'Palafrugell', lat: 41.887, lon: 3.183, facing: 150, open: 50, sea: [41.887, 3.1835] },
@@ -32,6 +32,22 @@ export function seaPoint(b) {
 }
 
 export const TZ = 'Europe/Madrid';
+
+/** Distància aproximada (km) entre dos punts. */
+export function distKm(lat1, lon1, lat2, lon2) {
+  const dy = (lat2 - lat1) * 111.32, dx = (lon2 - lon1) * 111.32 * Math.cos((lat1 * Math.PI) / 180);
+  return Math.hypot(dx, dy);
+}
+
+/** Platja més propera a un punt, si n'és a menys de `maxKm`. */
+export function nearBeach(lat, lon, maxKm = 1.5) {
+  let best = null;
+  for (const b of BEACHES) {
+    const d = distKm(lat, lon, b.lat, b.lon);
+    if (d <= maxKm && (!best || d < best.d)) best = { b, d };
+  }
+  return best?.b ?? null;
+}
 
 /** Nom curt d'una direcció en graus (N, NE, E…). */
 export function windName(deg) {
@@ -99,7 +115,9 @@ export async function fetchPoint(lat, lon) {
   const c = pointCache.get(key);
   if (c && Date.now() - c.fetchedAt < TTL) return c;
   const { ma, wa, xa } = await download([lat.toFixed(4)], [lon.toFixed(4)]);
-  const p = { fetchedAt: Date.now(), hours: toHours(ma[0].hourly, wa[0].hourly, xa?.[0]?.hourly), land: (wa[0].elevation ?? 0) > 2 };
+  // El model d'onades té cel·les de diversos km i agafa la de mar més propera: diem a quina distància és.
+  const cellKm = distKm(lat, lon, ma[0].latitude, ma[0].longitude);
+  const p = { fetchedAt: Date.now(), hours: toHours(ma[0].hourly, wa[0].hourly, xa?.[0]?.hourly), land: (wa[0].elevation ?? 0) > 2, cellKm };
   pointCache.set(key, p);
   return p;
 }

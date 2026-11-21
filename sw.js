@@ -1,6 +1,6 @@
 // Service worker: permet obrir l'app sense connexió.
 // Les dades del mar NO es guarden aquí (les desa l'app amb la seva hora), només els fitxers de l'app.
-const VERSION = 'mar-v8';
+const VERSION = 'mar-v9';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'css/mar.css', 'manifest.webmanifest',
   'js/app.js', 'js/marine.js', 'js/store.js', 'js/buoy.js',

@@ -18,7 +18,7 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 - `js/app.js`: mapa Leaflet 1.9.4 (cdnjs) amb tessel·les d'OpenStreetMap (CARTO demana clau), etiquetes de platja col·locades sense solapar-se (`layoutLabels`), barra de temps, llista, fitxa de platja i gràfic de 48 h.
 - `js/marine.js`: llista `BEACHES`, descàrrega (`fetchMarine`, TTL 1 h, 4 dies), onada a la platja (`exposure`, `beachWave`), índex (`analyze`), millor franja (`bestWindow`).
 - `js/store.js`: localStorage clau `mar.v1` (preferides `favBeaches`, franja `swimWindow`, dades `marine`). La primera vegada recupera preferides de l'antiga clau `temps.v1`.
-- `tools/make-icons.js`: genera les icones PNG (sense dependències). `PLA.md`: fonts, llindars i fases.
+- `tools/make-icons.js`: genera les icones PNG (sense dependències). `tools/check-points.html` (obrir-lo amb el servidor local): mapa ampliat de cada platja amb el punt `sea` (vermell), la platja (blau) i la línia de cap on mira, per revisar-ho. `PLA.md`: fonts, llindars i fases.
 
 ## Dades
 - Onades: Open-Meteo Marine (best_match, ~MeteoFrance wave), punts a 5-15 km mar endins, `cell_selection=sea`. Vent: Open-Meteo Forecast (AROME). Gratuït, sense clau, una sola crida per a totes les platges.
@@ -32,6 +32,7 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, La Fosca, Palamós (Platja Gran), Sant Antoni, Sant Feliu, Tossa, Lloret.
 - `facing` = cap on mira la platja (graus), `open` = mitja obertura del sector obert, `sea` = punt del mapa ~150 m mar endins, revisat sobre el mapa ampliat.
 - Orientacions estimades per Claude i encara per validar amb l'usuari: Cala Montgó (80°, s'obre a l'est), Sa Tuna (55°), Tossa (120°), Lloret (155°).
+- Aiguablava corregida el 21/11/2026 (abans 80°, i el punt queia damunt del Parador): la cala s'obre al N-NE, `facing` 15, `open` 30. Amb mar de fons del S/SO hi arriba molt poca onada, i és correcte.
 - Si s'afegeix una platja, `cachedMarine()` descarta les dades desades automàticament (comprova que hi siguin totes).
 
 ## Criteris decidits per l'usuari
@@ -41,7 +42,7 @@ Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, 
 - Per a l'usuari, la direcció de l'onada pesa més que la del vent, i el període compta molt (21/11/2026). `seaState` a `marine.js`: tipus de mar segons el període de pic (el més gran entre pic i mitjà): picada/choppy < 4 s (×1,25 a l'índex), curta 4–6 s (×1), mitjana 6–8 s (×0,95), llarga ≥ 8 s (×0,9), creuada/rentadora si dos trens d'onades difereixen ≥ 45° i el segon fa ≥ 40 % (×1,2). El factor només afecta l'índex, no l'alçada que es mostra. Refracció: amb període llarg el sector obert s'eixampla fins a 20°. Valors estimats, a calibrar.
 - Manual "Com funciona" (botó "i" de la capçalera, i des de la fitxa) a `index.html` (`#help`). Si canvien llindars o factors, actualitza'l també.
 - Mapa: només etiquetes, sense punts ni línies. Etiqueta (21/11/2026, perquè el semàfor no es confongués amb l'alçada): cercle de color = **nota per nedar** (l'únic element amb el color del semàfor) + nom + pastilla blava quadrada = **onada a la platja** (m, fletxa cap on va) + pastilla de vent arrodonida (fletxa, km/h, color segons la força). `PILL_H`/`WAVE_W`/`WIND_W` a `app.js` han de coincidir amb `.bm .pill` a `mar.css`. Al mòbil `fitCoast` deixa 170 px a la dreta perquè hi càpiguen.
-- Punt lliure: mantenir premut el mapa (`tapHold`) o clic dret obre la mateixa fitxa per a aquell punt (`fetchPoint` a `marine.js`, TTL 1 h). Es calcula com a mar obert (`facing` null) fins que l'usuari tria cap on mira la costa; es desa a `store` (`point`) i queda marcat fins que l'esborra.
+- Punt lliure: mantenir premut el mapa (`tapHold`) o clic dret obre la mateixa fitxa per a aquell punt (`fetchPoint` a `marine.js`, TTL 1 h). Si és a menys de 1,5 km d'una platja n'agafa l'orientació (`like`, xip "Com <platja>"); si no, mar obert (`facing` null) fins que l'usuari tria cap on s'obre la costa. La fitxa diu a quants km és la cel·la del model (`cellKm`): el model no entra a les cales, totes les de Begur agafen la mateixa cel·la a ~7 km; es desa a `store` (`point`) i queda marcat fins que l'esborra.
 - Ordinador i pantalles horitzontals (≥ 900 × 540 px; `wide` a `app.js` ha de coincidir amb la media query de `css/mar.css`): mapa gran a l'esquerra amb la barra de temps, columna a la dreta (`.side`: platges, boia, peu) amb desplaçament propi; la fitxa s'obre damunt d'aquesta columna sense tapar el mapa; el manual és una finestra centrada. Al mòbil, una sola columna com sempre.
 - Botons ràpids: "Ara", "Demà 9 h" i demà passat a les 9 h amb el nom del dia.
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).

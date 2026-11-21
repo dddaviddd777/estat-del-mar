@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>Punts</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>body{margin:0;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;font:12px sans-serif}div.c{position:relative}div.m{height:235px}b{position:absolute;z-index:999;background:#fff;padding:1px 4px;top:0;left:0}</style>
+<body><script type="module">
+import { BEACHES } from '../js/marine.js';
+for (const b of BEACHES) {
+  const c = document.createElement('div'); c.className='c'; c.innerHTML=`<b>${b.short} f${b.facing}</b><div class="m"></div>`; document.body.append(c);
+  const m = L.map(c.querySelector('.m'), {zoomControl:false, attributionControl:false}).setView(b.sea, 16);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+  L.circleMarker(b.sea, {radius:5, color:'red'}).addTo(m);
+  L.circleMarker([b.lat,b.lon], {radius:4, color:'blue'}).addTo(m);
+  const f=b.facing*Math.PI/180; L.polyline([b.sea,[b.sea[0]+0.004*Math.cos(f), b.sea[1]+0.004*Math.sin(f)/0.745]],{color:'red'}).addTo(m);
+}
+</script>

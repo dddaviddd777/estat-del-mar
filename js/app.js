@@ -1,5 +1,5 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach } from './marine.js';
 import * as store from './store.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib } from './buoy.js';
 
@@ -172,7 +172,7 @@ function initMap() {
     pickPoint(e.latlng.lat, e.latlng.lng);
   });
   const sp = store.get('point', null);
-  if (sp && !point) pickPoint(sp.lat, sp.lon, { open: false, facing: sp.facing ?? null });
+  if (sp && !point) pickPoint(sp.lat, sp.lon, { open: false, facing: sp.facing ?? null, like: sp.like ?? null });
 }
 
 // Mida de cada etiqueta (nota + nom + onada + vent), per poder-les col·locar sense que es trepitgin.
@@ -291,17 +291,23 @@ const POINT_ID = 'punt';
 let point = null;      // { b, hours, land, err }
 let pointMarker = null;
 
-function pointBeach(lat, lon, facing = null) {
+// Orientació del punt: `like` = la d'una platja propera (la mateixa cala), `facing` = triada a mà, res = mar obert.
+function pointBeach(lat, lon, { facing = null, like = null } = {}) {
+  const near = nearBeach(lat, lon);
+  const ref = like ? BEACHES.find((x) => x.id === like) : null;
   return { id: POINT_ID, custom: true, name: 'Punt triat', short: 'Punt', town: `${lat.toFixed(3)} N · ${lon.toFixed(3)} E`,
-    lat, lon, facing, open: 50, sea: [lat, lon] };
+    lat, lon, near, like: ref?.id ?? null, facing: ref ? ref.facing : facing, open: ref ? ref.open : 50, sea: [lat, lon] };
 }
+const savePoint = () => store.set('point', { lat: point.b.lat, lon: point.b.lon, facing: point.b.facing, like: point.b.like });
 const getBeach = (id) => (id === POINT_ID ? point?.b : BEACHES.find((x) => x.id === id));
 // Hores del punt alineades amb les de les platges (la barra de temps fa servir el mateix índex).
 const hoursOf = (b) => (b.custom ? point?.hours : data.beaches[b.id]);
 
-async function pickPoint(lat, lon, { open = true, facing = null } = {}) {
-  point = { b: pointBeach(lat, lon, facing), hours: null };
-  store.set('point', { lat, lon, facing });
+async function pickPoint(lat, lon, { open = true, facing = null, like } = {}) {
+  // Un punt nou a prop d'una platja agafa la seva orientació: és la mateixa cala.
+  if (like === undefined) like = nearBeach(lat, lon)?.id ?? null;
+  point = { b: pointBeach(lat, lon, { facing, like }), hours: null };
+  savePoint();
   renderPointMarker();
   if (open) openDetail(POINT_ID);
   await loadPoint();
@@ -314,7 +320,7 @@ async function loadPoint() {
     const r = await fetchPoint(p.b.lat, p.b.lon);
     const byT = new Map(r.hours.map((h) => [h.t, h]));
     p.hours = data.times.map((t) => byT.get(t) ?? { t });
-    p.land = r.land; p.err = null;
+    p.land = r.land; p.cellKm = r.cellKm; p.err = null;
   } catch (e) { p.err = e.message; }
   if (point !== p) return; // mentrestant n'han triat un altre
   renderPointMarker();
@@ -323,8 +329,9 @@ async function loadPoint() {
 
 function setPointFacing(f) {
   if (!point) return;
-  point.b.facing = f;
-  store.set('point', { lat: point.b.lat, lon: point.b.lon, facing: f });
+  const { lat, lon } = point.b;
+  point.b = typeof f === 'string' ? pointBeach(lat, lon, { like: f }) : pointBeach(lat, lon, { facing: f });
+  savePoint();
   renderPointMarker();
   renderDetail();
 }
@@ -356,12 +363,19 @@ function renderPointMarker() {
 // Bloc de la fitxa del punt: cap on mira la costa (per corregir l'onada) i esborrar-lo.
 const FACINGS = [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SO', 225], ['O', 270], ['NO', 315]];
 function pointBlock(b) {
-  const chips = [['Mar obert', null], ...FACINGS].map(([lbl, f]) =>
-    `<button data-facing="${f ?? ''}" class="${b.facing === f ? 'on' : ''}">${lbl}</button>`).join('');
+  const opts = [...(b.near ? [[`Com ${b.near.short}`, b.near.id]] : []), ['Mar obert', null], ...FACINGS];
+  const chips = opts.map(([lbl, f]) => {
+    const on = typeof f === 'string' ? b.like === f : !b.like && b.facing === f;
+    return `<button data-facing="${f ?? ''}" class="${on ? 'on' : ''}">${lbl}</button>`;
+  }).join('');
+  const like = b.like && BEACHES.find((x) => x.id === b.like);
+  const cell = point?.cellKm >= 1 ? ` El model d'onades no arriba dins de les cales: agafa el mar obert a ${nf1.format(point.cellKm)} km d'aquí, i l'app el corregeix segons cap on s'obre la costa.` : '';
   return `<div class="d-point">
-    <p>${b.facing == null
-      ? 'Es calcula com a <b>mar obert</b>: l\x27onada entra sencera, vingui d\x27on vingui. Si el punt és a la vora d\x27una cala o platja, tria cap on mira la costa i l\x27app hi aplicarà la correcció d\x27orientació.'
-      : `La costa mira al <b>${windName(b.facing)}</b>: l'onada que ve d'altres direccions arriba reduïda, com a les platges.`}</p>
+    <p>${like
+      ? `És a la cala <b>${/^[aeiouàèéíòóú]/i.test(like.name) ? `d'${like.name}` : `de ${like.name}`}</b>, que s'obre al ${windName(like.facing)}: es calcula com la platja, i l'onada que ve d'altres direccions hi arriba reduïda.`
+      : b.facing == null
+      ? 'Es calcula com a <b>mar obert</b>: l\x27onada entra sencera, vingui d\x27on vingui. Si el punt és dins d\x27una cala o badia, tria cap on s\x27obre la costa i l\x27app hi aplicarà la correcció d\x27orientació.'
+      : `La costa s'obre al <b>${windName(b.facing)}</b>: l'onada que ve d'altres direccions arriba reduïda, com a les platges.`}${cell}</p>
     <div class="dir-chips" role="group" aria-label="Cap on mira la costa">${chips}</div>
     ${point?.land ? '<p class="d-warn">Aquest punt sembla a terra: l\x27onada és la del mar més proper.</p>' : ''}
     <button class="link-btn" data-del-point>Esborra el punt del mapa</button>
@@ -748,6 +762,6 @@ load();
 // Fitxa del punt triat: cap on mira la costa i esborrar-lo.
 $('dBody').addEventListener('click', (e) => {
   const f = e.target.closest('[data-facing]');
-  if (f) return setPointFacing(f.dataset.facing === '' ? null : Number(f.dataset.facing));
+  if (f) { const v = f.dataset.facing; return setPointFacing(v === '' ? null : /^d+$/.test(v) ? Number(v) : v); }
   if (e.target.closest('[data-del-point]')) removePoint();
 });
