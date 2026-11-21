@@ -41,6 +41,7 @@ Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, 
 - Per a l'usuari, la direcció de l'onada pesa més que la del vent, i el període compta molt (21/11/2026). `seaState` a `marine.js`: tipus de mar segons el període de pic (el més gran entre pic i mitjà): picada/choppy < 4 s (×1,25 a l'índex), curta 4–6 s (×1), mitjana 6–8 s (×0,95), llarga ≥ 8 s (×0,9), creuada/rentadora si dos trens d'onades difereixen ≥ 45° i el segon fa ≥ 40 % (×1,2). El factor només afecta l'índex, no l'alçada que es mostra. Refracció: amb període llarg el sector obert s'eixampla fins a 20°. Valors estimats, a calibrar.
 - Manual "Com funciona" (botó "i" de la capçalera, i des de la fitxa) a `index.html` (`#help`). Si canvien llindars o factors, actualitza'l també.
 - Mapa: només etiquetes (cercle de color amb l'onada + nom + pastilla de vent amb fletxa, km/h i color segons la força). Sense punts ni línies.
+- Ordinador i pantalles horitzontals (≥ 900 × 540 px; `wide` a `app.js` ha de coincidir amb la media query de `css/mar.css`): mapa gran a l'esquerra amb la barra de temps, columna a la dreta (`.side`: platges, boia, peu) amb desplaçament propi; la fitxa s'obre damunt d'aquesta columna sense tapar el mapa; el manual és una finestra centrada. Al mòbil, una sola columna com sempre.
 - Botons ràpids: "Ara", "Demà 9 h" i demà passat a les 9 h amb el nom del dia.
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).
 

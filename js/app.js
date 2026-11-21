@@ -19,6 +19,8 @@ let offline = false;
 let map = null;
 const markers = {};
 let selected = null;
+// Disposició d'ordinador / pantalla horitzontal (ha de coincidir amb la media query de css/mar.css).
+const wide = matchMedia('(min-width: 900px) and (min-height: 540px)');
 
 function dayLabel(t) {
   const d = localParts(t).day;
@@ -140,8 +142,12 @@ function initMap() {
     },
   });
   new Sst({ position: 'topleft' }).addTo(map);
-  const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))), { padding: [24, 24], paddingBottomRight: [90, 24] });
+  // Les etiquetes surten cap a la dreta (mar): deixem-hi lloc perquè les de més a l'est no quedin tallades.
+  const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))),
+    wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [90, 24] });
   fitCoast();
+  // En passar de mòbil a ordinador (o al revés) el mapa canvia molt de mida: el tornem a encaixar.
+  wide.addEventListener('change', () => setTimeout(() => { map.invalidateSize(); fitCoast(); }, 50));
   // Si el mapa s'ha creat quan encara no tenia mida (pantalla amagada), l'ajustem quan en tingui.
   let hadSize = map.getSize().x > 100;
   new ResizeObserver(() => {
@@ -377,7 +383,8 @@ function openDetail(id) {
   $('detail').hidden = false;
   renderDetail();
   renderMarkers();
-  if (map) map.panTo(seaPoint(BEACHES.find((x) => x.id === id)));
+  // Al mòbil la fitxa tapa mig mapa: hi centrem la platja. A l'ordinador el mapa queda sencer al costat.
+  if (map && !wide.matches) map.panTo(seaPoint(BEACHES.find((x) => x.id === id)));
 }
 function closeDetail() { $('detail').hidden = true; selected = null; renderMarkers(); }
 
