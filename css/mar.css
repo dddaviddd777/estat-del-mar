@@ -35,13 +35,13 @@ a.icon-btn { color: inherit; text-decoration: none; }
 .bm-wrap { background: none; border: 0; }
 .bm { position: relative; width: 0; height: 0; }
 /* Etiqueta: [nota] nom [onada] [vent]. Cada dada amb la seva forma; només la nota porta el color del semàfor. */
-.bm .pill { position: absolute; display: flex; align-items: center; gap: 5px; height: 32px; padding-right: 3px; border-radius: 16px;
+.bm .pill { position: absolute; display: flex; align-items: center; gap: 5px; height: 32px; padding-right: 4px; border-radius: 16px 8px 8px 16px;
   background: #fff; color: #0b1d2c; white-space: nowrap; cursor: pointer; font: 500 12px Outfit, system-ui, sans-serif;
   box-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
 .bm .pill .sc { flex: none; width: 28px; height: 28px; margin-left: 2px; border-radius: 50%; background: var(--c); display: grid; place-items: center;
   font-weight: 700; font-size: 11px; letter-spacing: -.03em; box-shadow: inset 0 0 0 1.5px rgba(11, 29, 44, .3); }
-/* Onada (a dalt) i vent (a baix) apilats en una columna de 62 px (DATA_W a app.js) */
-.bm .pill .st { flex: none; width: 62px; display: flex; flex-direction: column; gap: 2px; }
+/* Onada (a dalt) i vent (a baix) apilats en una columna d'almenys 66 px (DATA_W a app.js); s'eixampla si el text no hi cap. L'etiqueta té les cantonades de la dreta menys rodones perquè les pastilles no en sobresurtin. */
+.bm .pill .st { flex: none; min-width: 66px; display: flex; flex-direction: column; gap: 2px; }
 .bm .pill .wv { box-sizing: border-box; height: 14px; padding: 0 4px 0 3px; border-radius: 3px;
   background: #d9ecff; color: #0b3a66; display: flex; align-items: center; gap: 2px; font-weight: 700; font-size: 11px; }
 .bm .pill .wv small, .bm .pill .wind small { font-size: 8.5px; font-weight: 500; margin-left: 1px; opacity: .8; }

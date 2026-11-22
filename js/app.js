@@ -175,11 +175,11 @@ function initMap() {
 
 // Mida de cada etiqueta (nota + nom + onada i vent apilats), per poder-les col·locar sense que es trepitgin.
 // Ha de coincidir amb .bm .pill a css/mar.css: alçada PILL_H, cercle de 28 px a 2 px de la vora (centre a R), columna DATA_W.
-const PILL_H = 32, R = PILL_H / 2, DATA_W = 62;
+const PILL_H = 32, R = PILL_H / 2, DATA_W = 66;
 const measureCtx = document.createElement('canvas').getContext('2d');
 function pillWidth(b) {
   measureCtx.font = '500 12px Outfit, system-ui, sans-serif';
-  return 2 + 28 + 5 + measureCtx.measureText(b.short).width + 5 + DATA_W + 3;
+  return 2 + 28 + 5 + measureCtx.measureText(b.short).width + 5 + DATA_W + 4;
 }
 
 /**

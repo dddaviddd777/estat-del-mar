@@ -9,7 +9,7 @@ import * as store from './store.js';
  */
 export const BEACHES = [
   // Cap de Creus i Cap Norfeu: punts de bany de l'usuari (22/11/2026), en mar obert prop del cap; el cap els tapa de l'oest i del nord.
-  { id: 'capcreus', name: 'Cap de Creus', short: 'Cap de Creus', town: 'Cadaqués', lat: 42.308, lon: 3.314, facing: 135, open: 80, sea: [42.308, 3.314] },
+  { id: 'capcreus', name: 'Cap de Creus', short: 'Cap de Creus', town: 'Cadaqués', lat: 42.315, lon: 3.321, facing: 130, open: 100, sea: [42.315, 3.321] },
   { id: 'norfeu', name: 'Cap Norfeu', short: 'Cap Norfeu', town: 'Roses', lat: 42.236, lon: 3.249, facing: 170, open: 90, sea: [42.236, 3.249] },
   { id: 'montgo', name: 'Cala Montgó', short: 'Montgó', town: "L'Escala", lat: 42.1074, lon: 3.1685, facing: 100, open: 30, sea: [42.1071, 3.1706] },
   { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0558, lon: 3.2143, facing: 95, open: 75, sea: [42.0558, 3.2143] },
