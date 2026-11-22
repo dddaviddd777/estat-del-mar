@@ -17,6 +17,8 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 - `index.html`, `css/style.css` (base), `css/mar.css` (pantalla del mar).
 - `js/app.js`: mapa Leaflet 1.9.4 (cdnjs) amb tessel·les d'OpenStreetMap (CARTO demana clau), etiquetes de platja col·locades sense solapar-se (`layoutLabels`), barra de temps, llista, fitxa de platja i gràfic de 48 h.
 - `js/marine.js`: llista `BEACHES`, descàrrega (`fetchMarine`, TTL 1 h, 4 dies), onada a la platja (`exposure`, `beachWave`), índex (`analyze`), millor franja (`bestWindow`).
+- `js/coast.js`: línia de costa real (`data/costa.json`), `coastInfo` (distància i si és mar o terra) i `shelterAt` (abric en 36 direccions). `js/route.js`: motor de les rutes (mostres, previsió, temps de pas, esforç, millor hora). `js/routeui.js`: dibuix, ruta al mapa i fitxa "La teva nedada".
+- `data/costa.json` (97 kB): costa d'OSM de Portbou a Blanes, simplificada a 4 m, sense roques de menys de 1.000 m². Es regenera amb `node tools/make-coast.js` (Overpass per franges; `--cache` reaprofita la baixada desada a la carpeta temporal).
 - `js/store.js`: localStorage clau `mar.v1` (preferides `favBeaches`, franja `swimWindow`, dades `marine`). La primera vegada recupera preferides de l'antiga clau `temps.v1`.
 - `tools/make-icons.js`: genera les icones PNG (sense dependències). `tools/check-points.html` (obrir-lo amb el servidor local): mapa ampliat de cada platja amb el punt `sea` (vermell), la platja (blau) i la línia de cap on mira, per revisar-ho. `PLA.md`: fonts, llindars i fases.
 
@@ -53,6 +55,15 @@ Cap de Creus, Cap Norfeu, Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Ta
 - Botons ràpids: "Ara", "Demà 9 h" i demà passat a les 9 h amb el nom del dia.
 - Franja de millor hora per defecte: 6–12 h (encara sense pantalla per canviar-la).
 
+## Rutes de nedada (fases 1 i 2, 22/11/2026)
+L'usuari i els seus companys neden de cala a cala (5-6 km, a ~50 m de la costa, sovint anada i tornada). Botó de ruta sota el zoom del mapa.
+- **Dibuix** (com al MapTrack): creu al centre, «+ Punt», «Desfer», «Fet», ✕. Cal zoom ≥ 12,5 per posar punts. Només es dibuixa l'anada: si acaba a menys de 300 m d'on comença és un circuit; si no, per defecte anada i tornada pel mateix camí. En editar (llapis), la creu no compta com a punt fins que s'arrossega el mapa. Una sola ruta desada (`route` a `store`, i la previsió a `routeData`) fins que l'usuari l'esborra.
+- **Càlcul**: mostres cada 250 m; previsió (Open-Meteo, mateixes crides que les platges + corrents `ocean_current_*`) en una de cada 3 mostres. Temps de pas amb el ritme (per defecte 2:00/100 m). A cada mostra, l'abric surt de la costa real (`shelterAt`: raigs cada 10° fins a 5 km; tapat < 250 m, obert > 3 km, escala logarítmica) i passa a `exposure` (`beach.shelter`), i l'índex és el mateix `analyze` de les platges. Mostres a < 25 m de la roca o a terra agafen l'abric de la mostra bona més propera.
+- **Esforç (fase 2)**: vent i corrent al llarg del sentit de nedada. Corrent prop de costa = 0,5 × model (cel·les de ~8 km, "no apte per navegació costanera") + 2 % del vent (`CUR_MODEL`, `CUR_WIND` a `route.js`, a calibrar). Corregeix la durada; "a favor/en contra" si el corrent és ≥ 6 % de la velocitat o el vent ≥ 15 km/h. La marea no compta (pocs cm).
+- **Millor hora**: prova cada 30 min dins la franja de bany del dia triat (i al revés si és només d'anada) i recomana si millora clarament el pitjor tram (`recommend`).
+- **Mapa**: línia amb el color del semàfor per trams (tornada més prima i ~30 m mar endins), fletxes, hores cada 20 min, sortida/gir i pastilla del pitjor tram. Amb zoom < 12 només la línia (`route-far`). Dibuixant, s'amaguen etiquetes i boies (`body.routing`).
+- Les orientacions calculades amb la costa quadren amb les revisades a mà de les platges (0-25° de diferència).
+
 ## Pendent (proposat, no fet)
 1. ~~Botó "Obre al Windy"~~, ~~boia del Cap de Begur~~ i ~~calibratge automàtic~~ fets el 21/11/2026.
    - `js/buoy.js`: lectura en directe de la boia de Begur i comparació amb els models al mateix punt.
@@ -61,3 +72,4 @@ Cap de Creus, Cap Norfeu, Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Ta
 2. Diari de nedades: platja, hora, com estava el mar (0-10) i onada observada, guardat al mòbil amb exportació; servirà per calibrar orientacions i pesos amb dades reals.
 3. Calibratge de 2-3 setmanes amb el Windy i el que trobin a l'aigua.
 4. Més endavant: boies reals, Meteocat, avís la nit abans.
+5. Rutes: calibrar el corrent i l'abric amb nedades reals; el diari de nedades hauria de poder desar també la ruta feta.

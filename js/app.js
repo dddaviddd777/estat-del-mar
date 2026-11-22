@@ -2,6 +2,7 @@ import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, lo
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach } from './marine.js';
 import * as store from './store.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib, OTHER_BUOYS, fetchOthers, cachedOthers } from './buoy.js';
+import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute } from './routeui.js';
 
 const $ = (id) => document.getElementById(id);
 const nf1 = new Intl.NumberFormat('ca', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -59,6 +60,7 @@ async function load(force = false) {
     data = await fetchMarine({ force });
     offline = false;
     loadPts();
+    refreshRoute();
     const keep = idx > nowIdx ? data.times[idx] : null;
     setNow();
     if (keep) { const k = data.times.indexOf(keep); if (k >= 0) idx = k; }
@@ -135,6 +137,8 @@ function initMap() {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   L.control.zoom({ position: 'topleft' }).addTo(map);
+  // Ruta de nedada (botó sota el zoom): dibuix, línia de colors i fitxa, a js/routeui.js.
+  initRoutes(map, { closeDetail, wide, dayLabel, times: () => data?.times ?? [] });
   // Temperatura de l'aigua de tota la costa, a dalt a l'esquerra (és terra: no tapa cap etiqueta).
   const Sst = L.Control.extend({
     onAdd() {
@@ -169,6 +173,7 @@ function initMap() {
   let lastPick = 0;
   map.on('contextmenu', (e) => {
     e.originalEvent?.preventDefault?.();
+    if (isDrawing()) return; // dibuixant una ruta, el mapa només serveix per moure la creu
     if (Date.now() - lastPick < 800) return; // alguns mòbils l'envien dues vegades
     lastPick = Date.now();
     pickPoint(e.latlng.lat, e.latlng.lng);
@@ -682,6 +687,8 @@ function renderBuoy() {
 
 // ---------- Fitxa de platja ----------
 function openDetail(id) {
+  if (isDrawing()) return;
+  closeRouteSheet();
   selected = id;
   $('detail').hidden = false;
   renderDetail();
@@ -933,6 +940,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('help').hidden) closeHelp();
   else if (!$('detail').hidden) closeDetail();
+  else if (routeSheetOpen()) closeRouteSheet();
 });
 $('refreshBtn').onclick = () => load(true);
 

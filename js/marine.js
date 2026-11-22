@@ -84,16 +84,34 @@ export function cachedMarine() {
   return c && c.v === DATA_VERSION && BEACHES.every((b) => c.beaches?.[b.id]) ? c : null;
 }
 
-/** Les tres crides (onades, vent, altres models) per a una llista de punts. */
-async function download(lats, lons) {
+/** Les tres crides (onades, vent, altres models) per a una llista de punts. Les rutes demanen també els corrents. */
+async function download(lats, lons, { models = true, currents = false } = {}) {
   const common = `latitude=${lats.join(',')}&longitude=${lons.join(',')}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=4&cell_selection=sea`;
-  const [m, w, x] = await Promise.all([
+  const [m, w, x, c] = await Promise.all([
     getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=${MARINE.join(',')}`),
     getJson(`https://api.open-meteo.com/v1/forecast?${common}&wind_speed_unit=kmh&hourly=${WIND.join(',')}`),
     // El contrast de models és opcional: si falla, l'app funciona igual.
-    getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=wave_height,wave_direction&models=${WAVE_MODELS.map((o) => o.api).join(',')}`).catch(() => null),
+    models ? getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=wave_height,wave_direction&models=${WAVE_MODELS.map((o) => o.api).join(',')}`).catch(() => null) : null,
+    // Corrents (Mercator SMOC, cel·les de ~8 km): direcció cap on va el corrent, velocitat en km/h. També opcional.
+    currents ? getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=ocean_current_velocity,ocean_current_direction`).catch(() => null) : null,
   ]);
-  return { ma: [].concat(m), wa: [].concat(w), xa: x ? [].concat(x) : null };
+  return { ma: [].concat(m), wa: [].concat(w), xa: x ? [].concat(x) : null, ca: c ? [].concat(c) : null };
+}
+
+/**
+ * Previsió per a molts punts alhora (rutes de nedada): les mateixes hores que una platja, més el corrent
+ * del model (`cur`: [km/h, graus cap on va]) i a quina distància queda la cel·la del model de corrents.
+ */
+export async function fetchPlaces(lats, lons) {
+  const { ma, wa, ca } = await download(lats.map((v) => v.toFixed(4)), lons.map((v) => v.toFixed(4)), { models: false, currents: true });
+  return {
+    times: ma[0].hourly.time,
+    places: ma.map((M, i) => ({
+      hours: toHours(M.hourly, wa[i].hourly, null, ca?.[i]?.hourly),
+      waveKm: distKm(lats[i], lons[i], M.latitude, M.longitude),
+      curKm: ca?.[i] ? distKm(lats[i], lons[i], ca[i].latitude, ca[i].longitude) : null,
+    })),
+  };
 }
 
 export async function fetchMarine({ force = false } = {}) {
@@ -125,7 +143,7 @@ export async function fetchPoint(lat, lon) {
   return p;
 }
 
-function toHours(M, W, X) {
+function toHours(M, W, X, C = null) {
   return M.time.map((t, k) => ({
       t,
       hs: M.wave_height[k], dir: M.wave_direction[k], per: M.wave_period[k],
@@ -137,6 +155,7 @@ function toHours(M, W, X) {
       wind: W.wind_speed_10m[k], windDir: W.wind_direction_10m[k], gust: W.wind_gusts_10m[k],
       code: W.weather_code[k], air: W.temperature_2m[k],
       mod: X ? Object.fromEntries(WAVE_MODELS.map((o) => [o.id, [X[`wave_height_${o.api}`]?.[k] ?? null, X[`wave_direction_${o.api}`]?.[k] ?? null]])) : null,
+      ...(C ? { cur: C.ocean_current_velocity?.[k] == null ? null : [C.ocean_current_velocity[k], C.ocean_current_direction[k]] } : {}),
   }));
 }
 
@@ -155,6 +174,7 @@ const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); ret
  * que una onada curta no toca: el sector obert s'eixampla fins a 20° i la part que s'escola puja.
  */
 export function exposure(beach, fromDir, T = null) {
+  if (beach.shelter && fromDir != null) return shelterExposure(beach.shelter, fromDir, T);
   if (fromDir == null || beach.facing == null) return 1; // punt sense orientació: mar obert, entra tot
   const d = angDiff(fromDir, beach.facing);
   const open = beach.open + (T ? Math.max(0, Math.min(20, (T - 6) * 5)) : 0);
@@ -162,6 +182,24 @@ export function exposure(beach, fromDir, T = null) {
   if (d <= open) return 1;
   if (d >= open + 45) return leak;
   return 1 - (1 - leak) * ((d - open) / 45);
+}
+
+/**
+ * Exposició calculada amb la línia de costa real (rutes de nedada, js/coast.js): `open` diu, cada 10°,
+ * com d'obert és el mar en aquella direcció (0 = terra a prop, 1 = quilòmetres de mar). Amb període llarg,
+ * l'onada gira (refracció) i també entra per direccions veïnes fins a 20°, com a les platges.
+ */
+function shelterExposure(sh, fromDir, T) {
+  const n = sh.open.length, step = 360 / n;
+  const at = (d) => {
+    const f = ((((d % 360) + 360) % 360) / step), i = Math.floor(f) % n, j = (i + 1) % n, w = f - Math.floor(f);
+    return sh.open[i] * (1 - w) + sh.open[j] * w;
+  };
+  const widen = T ? Math.max(0, Math.min(20, (T - 6) * 5)) : 0;
+  let o = at(fromDir);
+  for (let d = 5; d <= widen; d += 5) o = Math.max(o, at(fromDir - d), at(fromDir + d));
+  const leak = T >= 9 ? 0.2 : 0.1;
+  return leak + (1 - leak) * o;
 }
 
 /**

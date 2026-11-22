@@ -259,8 +259,8 @@ a.icon-btn { color: inherit; text-decoration: none; }
   .foot { text-align: left; }
 
   /* Fitxa de platja: panell fix a la dreta, a sobre de la columna lateral; el mapa queda lliure. */
-  #detail { background: none; pointer-events: none; align-items: stretch; justify-content: flex-end; inset: 62px 18px 16px auto; width: calc(var(--side-w) + 4px); }
-  #detail .sheet-panel { pointer-events: auto; width: 100%; max-width: none; max-height: none; height: 100%;
+  #detail, #routeSheet { background: none; pointer-events: none; align-items: stretch; justify-content: flex-end; inset: 62px 18px 16px auto; width: calc(var(--side-w) + 4px); }
+  #detail .sheet-panel, #routeSheet .sheet-panel { pointer-events: auto; width: 100%; max-width: none; max-height: none; height: 100%;
     border-radius: 20px; padding: 16px 18px 24px; box-shadow: -6px 6px 30px rgba(0, 0, 0, .35); animation: side-in .2s ease-out; }
   @keyframes side-in { from { transform: translateX(30px); opacity: 0; } }
 
@@ -274,7 +274,83 @@ a.icon-btn { color: inherit; text-decoration: none; }
 @media (min-width: 1600px) and (min-height: 540px) {
   :root { --side-w: 500px; }
 }
-/* Boia del Cap de Begur al mapa: rombe petit i discret (blanc amb vora fosca), que no es confon amb el semàfor ni amb els punts propis.
-   El nom surt en passar-hi o tocar-lo. */
+/* Boies al mapa: boia clàssica vermella amb franja blanca i una ona, a sota de les etiquetes.
+   El nom i l'onada mesurada surten en passar-hi o tocar-la. */
 .buoy-dot { background: none; border: 0; }
 .buoy-dot svg { display: block; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+
+/* ---------- Rutes de nedada ---------- */
+.route-ctl a { display: grid; place-items: center; color: #0b1d2c; }
+.route-ctl a:hover { color: #d93025; }
+body.routing .route-ctl a { color: #d93025; }
+/* Dibuixant: fora etiquetes i boies, creu al centre del mapa i barra de botons a baix. */
+body.routing .bm-wrap, body.routing .buoy-dot { display: none; }
+.r-cross, .r-bar { display: none; }
+body.routing .r-cross { display: block; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; z-index: 650; pointer-events: none; }
+.r-cross::before, .r-cross::after { content: ''; position: absolute; background: #d93025; box-shadow: 0 0 0 1.5px #fff; border-radius: 1px; }
+.r-cross::before { left: 21px; top: 0; width: 2px; height: 44px; }
+.r-cross::after { top: 21px; left: 0; height: 2px; width: 44px; }
+body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1000; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  background: rgba(11, 29, 44, .92); color: #fff; border-radius: 16px; padding: 8px 8px 8px 14px; box-shadow: 0 4px 18px rgba(0, 0, 0, .35); }
+.r-bar-info { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.r-bar-info b { font-size: 16px; }
+.r-bar-info small { font-size: 12px; color: rgba(255, 255, 255, .7); }
+.r-bar-info small.flash { color: #ffd166; }
+.r-bar-btns { display: flex; gap: 6px; margin-left: auto; }
+.r-bar button { font-family: inherit; font-weight: 600; font-size: 14px; line-height: 1; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .14); color: #fff; }
+.r-bar button.pri { background: #d93025; }
+.r-bar button.ok { background: #fff; color: #0b1d2c; }
+.r-bar button.x { padding: 8px; display: grid; place-items: center; background: none; }
+.r-bar button:disabled { opacity: .4; }
+/* Ruta analitzada */
+.r-arrow { background: none; border: 0; }
+.r-arrow i { display: block; width: 14px; height: 14px; }
+.r-arrow svg { display: block; width: 14px; height: 14px; fill: #fff; stroke: #0b1d2c; stroke-width: 1.3; stroke-linejoin: round; }
+.r-tick { background: none; border: 0; }
+.r-tick span { position: absolute; left: 7px; top: -9px; font: 600 11px/1 system-ui, sans-serif; color: #0b1d2c; background: rgba(255, 255, 255, .88); padding: 2px 4px; border-radius: 5px; white-space: nowrap; pointer-events: none; }
+.r-pin { background: none; border: 0; }
+.r-pin i { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: #0b1d2c; border: 3px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); box-sizing: border-box; }
+.r-pin.end i { background: #fff; border-color: #0b1d2c; }
+.r-pin span { position: absolute; right: 10px; top: -10px; font: 600 12px/1 system-ui, sans-serif; color: #fff; background: #0b1d2c; padding: 4px 7px; border-radius: 8px; white-space: nowrap; }
+.r-worst { background: none; border: 0; }
+.r-worst span { position: absolute; left: 10px; top: 8px; display: flex; align-items: center; gap: 6px; font: 600 12px/1 system-ui, sans-serif; color: #0b1d2c;
+  background: #fff; padding: 3px 8px 3px 3px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); white-space: nowrap; cursor: pointer; }
+.r-worst b { min-width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #0b1d2c; font-size: 11.5px; }
+.route-far .r-tick, .route-far .r-arrow, .route-far .r-worst, .route-far .r-pin span { display: none; }
+/* Fitxa "La teva nedada" */
+.r-set { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.r-set label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.r-set label span { width: 58px; font-size: 13px; color: rgba(255, 255, 255, .7); }
+.r-set select { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 10px; border: 0; background: rgba(255, 255, 255, .14); color: #fff; }
+.r-set select option { color: #1b2430; background: #fff; }
+.r-set .dir-chips { margin: 4px 0 0; }
+.r-small { font-size: 12.5px; color: rgba(255, 255, 255, .7); }
+.r-rec { background: rgba(60, 207, 122, .16); border: 1px solid rgba(60, 207, 122, .35); border-radius: 12px; padding: 8px 10px; font-size: 14px; line-height: 1.45; margin: 8px 0; }
+.r-rec.same { background: rgba(255, 255, 255, .07); border-color: transparent; color: rgba(255, 255, 255, .75); font-size: 13px; }
+.r-rec button { margin-left: 6px; font-family: inherit; font-weight: 600; font-size: 13px; line-height: 1; padding: 6px 10px; border-radius: 10px; background: #3ccf7a; color: #0b1d2c; }
+.r-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 6px; }
+.r-kpis div { background: rgba(255, 255, 255, .08); border-radius: 12px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.r-kpis b { font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+.r-kpis b i { width: 10px; height: 10px; border-radius: 50%; }
+.r-kpis span { font-size: 11px; color: rgba(255, 255, 255, .6); }
+.r-sum { font-size: 14px; line-height: 1.5; margin: 8px 0; }
+.r-warn-t { color: #ffe08a; }
+.r-chart svg { display: block; }
+.r-legend { padding: 6px 0 0; color: rgba(255, 255, 255, .7); }
+.r-trams { list-style: none; margin: 0; padding: 0; }
+.r-trams li { display: grid; grid-template-columns: 44px 30px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, .08); cursor: pointer; border-radius: 8px; }
+.r-trams li:hover { background: rgba(255, 255, 255, .06); }
+.r-t { font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
+.r-t small { font-size: 10px; color: rgba(255, 255, 255, .55); }
+.r-sc { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #0b1d2c; font-size: 12px; }
+.r-what { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.r-what b { font-size: 14px; }
+.r-what small { font-size: 12px; color: rgba(255, 255, 255, .65); }
+.r-what em { font-style: normal; color: #ffe08a; }
+.ef { font-size: 11.5px; padding: 3px 7px; border-radius: 9px; white-space: nowrap; background: rgba(255, 255, 255, .1); color: rgba(255, 255, 255, .7); }
+.ef.favor { background: rgba(60, 207, 122, .2); color: #9be7b4; }
+.ef.contra { background: rgba(239, 91, 91, .2); color: #ff9f9f; }
+@media (max-width: 380px) {
+  .r-kpis { grid-template-columns: repeat(2, 1fr); }
+  .r-bar button { padding: 9px 9px; font-size: 13px; }
+}
