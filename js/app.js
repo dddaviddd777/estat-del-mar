@@ -592,11 +592,13 @@ function calibBlock() {
 // Punts discrets al mapa amb la posició de cada boia. Begur: la GPS de l'última lectura (gira al voltant de l'ancoratge)
 // o la nominal. Cap de Creus i Tordera (ICATMAR): la de boies.json, que desa la GitHub Action.
 const buoyDots = {};
+// Boia clàssica: con i cos vermells amb franja blanca i una ona a sota (el punt de la boia és la línia d'aigua).
+const BUOY_ICO = `<svg width="18" height="20" viewBox="0 0 20 22" aria-hidden="true"><path d="M10 3 13 11H7z" fill="#e0452f" stroke="#5a1409" stroke-width="1.2" stroke-linejoin="round"/><rect x="4" y="11" width="12" height="5" rx="2.5" fill="#e0452f" stroke="#5a1409" stroke-width="1.2"/><rect x="4.6" y="12.6" width="10.8" height="1.6" fill="#fff"/><path d="M2 19.5q2-2 4 0t4 0 4 0 4 0" fill="none" stroke="#185fa5" stroke-width="1.4"/></svg>`;
 function placeBuoyDot(id, ll, tip) {
   let d = buoyDots[id];
   if (!d) {
-    d = buoyDots[id] = L.marker(ll, { icon: L.divIcon({ className: 'buoy-dot', iconSize: [10, 10], iconAnchor: [5, 5] }), keyboard: false, zIndexOffset: -2000 }) // sota les etiquetes
-      .bindTooltip('', { direction: 'top', offset: [0, -6] })
+    d = buoyDots[id] = L.marker(ll, { icon: L.divIcon({ className: 'buoy-dot', html: BUOY_ICO, iconSize: [18, 20], iconAnchor: [9, 17] }), keyboard: false, zIndexOffset: -2000 }) // sota les etiquetes
+      .bindTooltip('', { direction: 'top', offset: [0, -16] })
       .on('click', () => $(id === 'begur' ? 'buoyCard' : 'buoyOthers')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
       .addTo(map);
   } else d.setLatLng(ll);
