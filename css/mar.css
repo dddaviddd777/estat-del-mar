@@ -55,6 +55,11 @@ a.icon-btn { color: inherit; text-decoration: none; }
 .bm .pill .wind svg { width: 12px; height: 12px; flex: none; }
 .bm .pill .wind path { fill: #0b1d2c; }
 .bm.sel .pill { outline: 3px solid #0b1d2c; outline-offset: 1px; }
+/* Etiquetes més petites amb el zoom allunyat: transform:scale (app.js, pillPos) des de la cantonada. Molt allunyat: només la nota. */
+.bm .pill { transform-origin: 0 0; }
+.bm .pill.mini { padding: 0; gap: 0; background: none; }
+/* Paperera de la fitxa d'un punt propi, al costat de la creu */
+.del-btn:hover, .del-btn:focus-visible { color: #ff8f8f; }
 .leaflet-marker-icon.bm-wrap:hover, .leaflet-marker-icon.bm-wrap:focus { z-index: 2000 !important; }
 .leaflet-container { font-family: Outfit, system-ui, sans-serif; }
 @media (prefers-color-scheme: dark) {

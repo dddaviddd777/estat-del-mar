@@ -127,7 +127,7 @@ function initMap() {
     if (!window.L) $('map').innerHTML = '<p style="padding:20px;color:#0b1d2c">El mapa necessita connexió.</p>';
     return;
   }
-  map = L.map('map', { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25, tapHold: true });
+  map = L.map('map', { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25, zoomDelta: 0.5, tapHold: true }); // mig nivell per clic: les etiquetes canvien de mida a poc a poc
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 17,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -188,8 +188,9 @@ function pillWidth(b) {
  * i cap on va · pastilla del vent = km/h, cap on bufa i color segons la força.
  */
 const ARROW = '<svg viewBox="0 0 18 18" aria-hidden="true" style="transform:rotate(ROTdeg)"><path d="M9 1l5 12-5-3-5 3z"/></svg>';
-function pillHtml(b, h, a) {
+function pillHtml(b, h, a, mini = lbl.mini) {
   const score = a.score >= 9.95 ? '10' : nf1.format(a.score);
+  if (mini) return `<b class="sc" style="--c:${LEVELS[a.level].color}" title="${esc(b.name)}: nota ${nf1.format(a.score)} de 10, onada ${a.beachHs == null ? '—' : m(a.beachHs)} m, vent ${h.wind == null ? '—' : Math.round(h.wind)} km/h">${score}</b>`;
   const wdir = a.sea?.dir ?? h.dir;
   const waveRot = ((wdir ?? 0) + 180) % 360, windRot = ((h.windDir ?? 0) + 180) % 360;
   return `<b class="sc" style="--c:${LEVELS[a.level].color}" title="Nota per nedar: ${nf1.format(a.score)} de 10 (${LEVELS[a.level].label.toLowerCase()})">${score}</b>
@@ -199,24 +200,43 @@ function pillHtml(b, h, a) {
 }
 
 /**
+ * Mida de les etiquetes segons l'espai que hi ha: com més allunyat és el zoom, més juntes queden les platges.
+ * Amb prou lloc, mida normal; si van justes, s'encongeixen (fins al 70 %); si ni així hi caben, només la nota
+ * (cercle de color). En acostar-se tornen a créixer. `per` = píxels d'alçada per etiqueta: la columna d'etiquetes
+ * pot ser una mica més llarga que la costa (×1,6 + 60 px), però no tant que quedin lluny de la seva platja.
+ */
+const lbl = { s: 1, mini: false };
+function labelMode(ys, mapH) {
+  if (ys.length < 2) return { s: 1, mini: false };
+  const span = Math.max(...ys) - Math.min(...ys);
+  const per = Math.min(mapH - 30, span * 1.6 + 60) / ys.length, need = PILL_H + 3;
+  if (per >= need * 0.92) return { s: 1, mini: false }; // una mica justes encara caben (el repàs les separa)
+  if (per >= need * 0.7) return { s: Math.round((per / need) * 20) / 20, mini: false };
+  return { s: per >= need * 0.45 ? 0.85 : 0.7, mini: true };
+}
+
+/**
  * Col·loca les etiquetes: cadascuna surt del seu punt cap al mar (segons cap on mira la platja)
  * i, si se'n trepitgen dues, se separen. Retorna el desplaçament (px) de cada etiqueta respecte del seu punt.
  */
 function layoutLabels() {
   const size = map.getSize();
-  const LEAD = 12, GAP = 3; // el cercle surt una mica cap al mar des del punt de la platja
+  const GAP = 3;
   // Platges i punts propis: les etiquetes dels punts (a la dreta del punt, o a l'esquerra si no hi caben) també compten.
-  const all = [...BEACHES, ...[...pts.values()].map((q) => q.b)].map((b) => {
-    const p = map.latLngToContainerPoint(seaPoint(b));
+  const list = [...BEACHES, ...[...pts.values()].map((q) => q.b)].map((b) => ({ b, p: map.latLngToContainerPoint(seaPoint(b)) }));
+  const inView = (p) => p.x > -20 && p.x < size.x + 20 && p.y > -20 && p.y < size.y + 20;
+  Object.assign(lbl, labelMode(list.filter((a) => inView(a.p)).map((a) => a.p.y), size.y));
+  const H = PILL_H * lbl.s, r = H / 2, LEAD = 12 * lbl.s; // el cercle surt una mica cap al mar des del punt de la platja
+  const all = list.map(({ b, p }) => {
     const f = ((b.custom ? 90 : b.facing) * Math.PI) / 180;
     const d = { x: p.x + Math.sin(f) * LEAD, y: p.y - Math.cos(f) * LEAD };
-    const w = labelWidth(b);
-    if (b.custom && d.x + w - R > size.x - 4) d.x = p.x - LEAD - w + 2 * R; // no hi cap a la dreta: a l'esquerra
-    return { id: b.id, p, d, x: d.x, y: d.y, w, minX: b.custom ? p.x - LEAD - w + 2 * R : p.x - 4 };
+    const w = (lbl.mini ? PILL_H : labelWidth(b)) * lbl.s;
+    if (b.custom && d.x + w - r > size.x - 4) d.x = p.x - LEAD - w + 2 * r; // no hi cap a la dreta: a l'esquerra
+    return { id: b.id, p, d, x: d.x, y: d.y, w, minX: b.custom ? p.x - LEAD - w + 2 * r : p.x - 4 };
   });
   // Només col·loquem les que es veuen; les de fora de la pantalla es queden a la seva posició natural.
-  const items = all.filter((a) => a.p.x > -20 && a.p.x < size.x + 20 && a.p.y > -20 && a.p.y < size.y + 20);
-  const rect = (a) => ({ l: a.x - R, r: a.x - R + a.w, t: a.y - R, b: a.y + R });
+  const items = all.filter((a) => inView(a.p));
+  const rect = (a) => ({ l: a.x - r, r: a.x - r + a.w, t: a.y - r, b: a.y + r });
   for (let k = 0; k < 260; k++) {
     if (k < 200) for (const a of items) { a.x += (a.d.x - a.x) * 0.04; a.y += (a.d.y - a.y) * 0.04; }
     for (let i = 0; i < items.length; i++) {
@@ -228,29 +248,32 @@ function layoutLabels() {
         if (ox <= 0 || oy <= 0) continue;
         // Preferim separar-les en vertical (la costa va de nord a sud i les etiquetes són amples).
         // Qui queda a dalt ho diu el punt de cada etiqueta (de nord a sud), no on ha anat a parar: així no s'encreuen.
-        if (oy < ox * 2) { const s = (A.p.y < B.p.y || (A.p.y === B.p.y && i < j) ? -1 : 1) * oy / 2; A.y += s; B.y -= s; }
-        else { const s = (A.x < B.x ? -1 : 1) * ox / 2; A.x += s; B.x -= s; }
+        if (oy < ox * 2) { const sh = (A.p.y < B.p.y || (A.p.y === B.p.y && i < j) ? -1 : 1) * oy / 2; A.y += sh; B.y -= sh; }
+        else { const sh = (A.x < B.x ? -1 : 1) * ox / 2; A.x += sh; B.x -= sh; }
       }
       // Dins del mapa, i la costa queda a l'oest: l'etiqueta no passa a l'esquerra del seu punt (no se'n va terra endins).
-      A.x = Math.max(Math.min(A.x, size.x - A.w + R - 4), A.minX);
-      A.y = Math.min(Math.max(A.y, R + 4), size.y - R - 18);
+      A.x = Math.max(Math.min(A.x, size.x - A.w + r - 4), A.minX);
+      A.y = Math.min(Math.max(A.y, r + 4), size.y - r - 18);
     }
   }
   // Repàs final: de dalt a baix, cap etiqueta en trepitja cap altra (si cal, la baixem).
   const hOverlap = (A, B) => Math.min(rect(A).r, rect(B).r) - Math.max(rect(A).l, rect(B).l) + GAP > 0;
   const sorted = [...items].sort((a, b) => a.y - b.y);
   sorted.forEach((B, i) => {
-    for (const A of sorted.slice(0, i)) if (hOverlap(A, B) && B.y < A.y + PILL_H + GAP) B.y = A.y + PILL_H + GAP;
+    for (const A of sorted.slice(0, i)) if (hOverlap(A, B) && B.y < A.y + H + GAP) B.y = A.y + H + GAP;
   });
   // I si la de baix surt del mapa, pugem la columna.
-  const bottom = size.y - R - 18;
+  const bottom = size.y - r - 18;
   for (let i = sorted.length - 1; i >= 0; i--) {
     const B = sorted[i];
     if (B.y > bottom) B.y = bottom;
-    for (const C of sorted.slice(i + 1)) if (hOverlap(B, C) && B.y > C.y - PILL_H - GAP) B.y = C.y - PILL_H - GAP;
+    for (const C of sorted.slice(i + 1)) if (hOverlap(B, C) && B.y > C.y - H - GAP) B.y = C.y - H - GAP;
   }
   return Object.fromEntries(all.map((a) => [a.id, { dx: a.x - a.p.x, dy: a.y - a.p.y }]));
 }
+
+// Estil de posició d'una etiqueta: el cercle de la nota queda centrat a (dx, dy) i tota l'etiqueta s'escala des d'allà.
+const pillPos = ({ dx, dy }) => `left:${(dx - R * lbl.s).toFixed(1)}px;top:${(dy - R * lbl.s).toFixed(1)}px${lbl.s !== 1 ? `;transform:scale(${lbl.s})` : ''}`;
 
 let labelOff = {};
 // Amplada de l'etiqueta: la d'un punt que encara carrega és més curta.
@@ -289,7 +312,7 @@ function renderMarkers() {
     const a = analyze(b, h);
     const { dx, dy } = off[b.id];
     const html = `<div class="bm ${selected === b.id ? 'sel' : ''}">
-        <span class="pill" style="left:${(dx - R).toFixed(1)}px;top:${(dy - R).toFixed(1)}px">${pillHtml(b, h, a)}</span></div>`;
+        <span class="pill ${lbl.mini ? 'mini' : ''}" style="${pillPos({ dx, dy })}">${pillHtml(b, h, a)}</span></div>`;
     markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
   }
   renderPtMarkers();
@@ -420,11 +443,13 @@ function renderPtMarker(id) {
   if (!map || !p) return;
   const b = p.b, h = p.hours?.[idx];
   const a = h && h.hs !== undefined ? analyze(b, h) : null;
-  const body = a ? pillHtml(b, h, a) : `<span class="nm" style="padding:0 8px">${esc(b.short)} · ${p.err ? 'sense dades' : 'carregant…'}</span>`;
+  const body = a ? pillHtml(b, h, a)
+    : lbl.mini ? `<b class="sc" style="--c:#fff" title="${esc(b.name)}">…</b>`
+    : `<span class="nm" style="padding:0 8px">${esc(b.short)} · ${p.err ? 'sense dades' : 'carregant…'}</span>`;
   // Posició de l'etiqueta: la que li ha donat layoutLabels (si encara no en té, a la dreta del punt).
   const o = labelOff[id] ?? { dx: 12 + R, dy: 0 };
   const html = `<div class="bm pt ${b.saved ? 'saved' : ''} ${selected === id ? 'sel' : ''}"><i class="pt-dot"></i>
-    <span class="pill" style="left:${(o.dx - R).toFixed(1)}px;top:${(o.dy - R).toFixed(1)}px">${body}</span></div>`;
+    <span class="pill ${lbl.mini ? 'mini' : ''}" style="${pillPos(o)}">${body}</span></div>`;
   const icon = L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] });
   if (!p.marker) {
     p.marker = L.marker([b.lat, b.lon], { icon, keyboard: true, title: b.name, zIndexOffset: b.saved ? 900 : 1000 })
@@ -456,7 +481,6 @@ function pointBlock(b) {
       : `La costa s'obre al <b>${windName(b.facing)}</b>: l'onada que ve d'altres direccions arriba reduïda, com a les platges.`}${cell}</p>
     <div class="dir-chips" role="group" aria-label="Cap on s'obre la costa">${chips}</div>
     ${p?.land ? '<p class="d-warn">Aquest punt sembla a terra: l\x27onada és la del mar més proper.</p>' : ''}
-    <button class="link-btn" data-del-point>${b.saved ? 'Esborra aquest punt desat' : 'Treu el punt del mapa'}</button>
   </div>`;
 }
 
@@ -665,6 +689,9 @@ function renderDetail() {
   $('dTitle').textContent = b.name;
   $('dTown').textContent = `${b.town} · ${b.facing == null ? 'mar obert' : `${b.custom ? 'la costa ' : ''}mira al ${windName(b.facing)}`}`;
   $('dStar').hidden = !!b.custom;
+  $('dDel').hidden = !b.custom;
+  $('dDel').title = b.saved ? 'Esborra el punt desat' : 'Treu el punt del mapa';
+  $('dDel').setAttribute('aria-label', $('dDel').title);
   if (!b.custom) {
     $('dStar').innerHTML = starSvg(favs.includes(b.id));
     $('dStar').style.color = favs.includes(b.id) ? '#ffd34d' : '';
@@ -817,6 +844,7 @@ $('beaches').addEventListener('click', (e) => {
 });
 
 $('dClose').onclick = closeDetail;
+$('dDel').onclick = () => deletePoint(selected);
 $('detail').addEventListener('click', (e) => { if (e.target === $('detail')) closeDetail(); });
 
 // Manual "Com funciona": s'obre des de la capçalera o des de la fitxa, a la secció que toca.
@@ -854,11 +882,10 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 
 load();
 
-// Fitxa del punt triat: cap on mira la costa i esborrar-lo.
+// Fitxa del punt triat: cap on mira la costa (esborrar-lo és la paperera de la capçalera, #dDel).
 $('dBody').addEventListener('click', (e) => {
   const f = e.target.closest('[data-facing]');
   if (f) { const v = f.dataset.facing; return setPointFacing(v === '' ? null : /^[0-9]+$/.test(v) ? Number(v) : v); }
-  if (e.target.closest('[data-del-point]')) deletePoint(selected);
 });
 // Desar el punt (o canviar-ne el nom). És un formulari perquè la tecla Retorn també desi.
 $('dBody').addEventListener('submit', (e) => {
