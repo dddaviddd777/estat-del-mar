@@ -161,6 +161,7 @@ function initMap() {
       .addTo(map);
   }
   map.on('moveend resize', () => renderMarkers());
+  renderBuoyDot();
   document.fonts?.ready.then(() => renderMarkers());
   // Mantenir premut (mòbil, tapHold de Leaflet) o clic dret (ordinador): consulta aquell punt.
   let lastPick = 0;
@@ -586,7 +587,25 @@ function calibBlock() {
     <p class="by-note">Error mitjà de l'onada en ${T.n} comparacions de 3 boies (Cap de Begur, Cap de Creus i Tordera) amb el que deia cada model per a aquella hora${n24 >= 6 ? `, i amb la previsió feta 24 h abans (${n24})` : ''}.${sst} Temporal, fins al ${fmt({ day: 'numeric', month: 'numeric', year: 'numeric' }).format(Date.parse(R.fins))}.</p>`;
 }
 
+// Punt discret al mapa amb la posició de la boia: la GPS de l'última lectura (gira al voltant de l'ancoratge) o la nominal.
+let buoyDot = null;
+function renderBuoyDot() {
+  if (!map) return;
+  const r = buoy?.reading;
+  const gps = r?.lat != null && r?.lon != null;
+  const ll = gps ? [r.lat, r.lon] : [BUOY.lat, BUOY.lon];
+  const tip = `Boia del ${BUOY.name} (Puertos del Estado)${gps ? ` · posició GPS de les ${hh(r.t)} h` : ''}${r?.hs != null ? ` · ${nf2.format(r.hs)} m mesurats` : ''}`;
+  if (!buoyDot) {
+    buoyDot = L.marker(ll, { icon: L.divIcon({ className: 'buoy-dot', iconSize: [10, 10], iconAnchor: [5, 5] }), keyboard: false, zIndexOffset: 1500 })
+      .bindTooltip('', { direction: 'top', offset: [0, -6] })
+      .on('click', () => $('buoyCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+      .addTo(map);
+  } else buoyDot.setLatLng(ll);
+  buoyDot.setTooltipContent(tip);
+}
+
 function renderBuoy() {
+  renderBuoyDot();
   const el = $('buoyCard');
   if (!el) return; // index.html antic encara a la memòria del navegador
   if (!buoy?.reading) {

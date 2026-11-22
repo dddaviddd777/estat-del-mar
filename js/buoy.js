@@ -29,6 +29,8 @@ export async function fetchBuoy({ force = false } = {}) {
   const reading = {
     t, hs: v.hm0 ?? null, hmax: v.hmax ?? null, dir: v.dmd ?? null, tp: v.tp ?? null,
     wind: v.vv_md != null ? v.vv_md * 3.6 : null, windDir: v.dv_md ?? null, sst: v.ts2 ?? null,
+    // Posició GPS de la boia en aquesta lectura: gira al voltant de l'ancoratge (s'ha vist a ~1,5 km del punt nominal).
+    lat: v.lat ?? null, lon: v.lon ?? null,
   };
   const models = await modelsAt(t).catch(() => (c?.reading?.t === t ? c.models : null));
   const data = { fetchedAt: Date.now(), reading, models };

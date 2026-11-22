@@ -274,3 +274,9 @@ a.icon-btn { color: inherit; text-decoration: none; }
 @media (min-width: 1600px) and (min-height: 540px) {
   :root { --side-w: 500px; }
 }
+/* Boia del Cap de Begur al mapa: rombe petit i discret (blanc amb vora fosca), que no es confon amb el semàfor ni amb els punts propis.
+   El nom surt en passar-hi o tocar-lo. */
+.buoy-dot { width: 10px; height: 10px; }
+.buoy-dot::after { content: ""; position: absolute; inset: 1px; background: #fff; border: 2px solid #0b1d2c; box-sizing: border-box;
+  transform: rotate(45deg); box-shadow: 0 1px 3px rgba(0, 0, 0, .4); opacity: .85; }
+.buoy-dot:hover::after { opacity: 1; }

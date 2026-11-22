@@ -26,6 +26,8 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 - Contrast de models (fitxa de platja): una tercera crida a Open-Meteo Marine amb `models=ecmwf_wam,ncep_gfswave025,dwd_ewam` (onada i direcció), desada a `h.mod`. ECMWF és el que el Windy ensenya per defecte. Si canvia el format de les dades desades, apuja `DATA_VERSION` a `marine.js`.
 - Temperatura de l'aigua: requadre al mapa (dalt a l'esquerra, sobre terra), mitjana de les platges amb escala de color (`sstColor`).
 - Boies (estudi a `PLA.md` §7): Cap de Begur (Puertos del Estado, 2798) es pot llegir directament des del navegador (API interna de Portus, CORS obert). Palamós (1718) no té dades. Les d'ICATMAR (Cap de Creus, Tordera; Montgó i Medes, d'estiu) rebutgen el navegador: caldria un intermediari.
+- Boia de Begur al mapa (22/11/2026): rombe petit blanc amb vora fosca (`.buoy-dot`, `renderBuoyDot` a `app.js`), a la **posició GPS de l'última lectura** (`lat`/`lon` que dona Portus a cada lectura; la boia gira al voltant de l'ancoratge, s'ha vist a ~1,5 km del punt nominal `BUOY`). Nom i onada mesurada en passar-hi; clic → targeta de la boia.
+- Cap de Creus i Tordera (ICATMAR) ja es llegeixen cada hora a la GitHub Action (`registre.jsonl` a la branca `calibratge`), però l'app encara no les ensenya.
 - Futur: Meteocat (vent costaner i avisos). La clau de Meteocat, si mai s'usa aquí, **mai al repo** (repo públic): aniria com a secret d'un Cloudflare Worker.
 
 ## Platges (16, de nord a sud)
