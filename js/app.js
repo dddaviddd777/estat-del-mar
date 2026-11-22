@@ -241,6 +241,14 @@ function layoutLabels() {
   // Només col·loquem les que es veuen; les de fora de la pantalla es queden a la seva posició natural.
   const items = all.filter((a) => inView(a.p));
   const rect = (a) => ({ l: a.x - r, r: a.x - r + a.w, t: a.y - r, b: a.y + r });
+  // El requadre de la temperatura de l'aigua (dalt a l'esquerra) no ha de tapar cap etiqueta: les que hi cauen, a la seva dreta.
+  const sstEl = $('sstBox'), mapBox = map.getContainer().getBoundingClientRect();
+  const sb = sstEl && !sstEl.hidden ? sstEl.getBoundingClientRect() : null;
+  const box = sb && sb.width ? { l: sb.left - mapBox.left - 4, r: sb.right - mapBox.left + 4, t: sb.top - mapBox.top - 4, b: sb.bottom - mapBox.top + 4 } : null;
+  const dodgeBox = (A) => {
+    const q = rect(A);
+    if (box && q.r > box.l && q.l < box.r && q.b > box.t && q.t < box.b) A.x = box.r + r;
+  };
   for (let k = 0; k < 260; k++) {
     if (k < 200) for (const a of items) { a.x += (a.d.x - a.x) * 0.04; a.y += (a.d.y - a.y) * 0.04; }
     for (let i = 0; i < items.length; i++) {
@@ -255,6 +263,7 @@ function layoutLabels() {
         if (oy < ox * 2) { const sh = (A.p.y < B.p.y || (A.p.y === B.p.y && i < j) ? -1 : 1) * oy / 2; A.y += sh; B.y -= sh; }
         else { const sh = (A.x < B.x ? -1 : 1) * ox / 2; A.x += sh; B.x -= sh; }
       }
+      dodgeBox(A);
       // Dins del mapa, i la costa queda a l'oest: l'etiqueta no passa a l'esquerra del seu punt (no se'n va terra endins).
       A.x = Math.max(Math.min(A.x, size.x - A.w + r - 4), A.minX);
       A.y = Math.min(Math.max(A.y, r + 4), size.y - r - 18);
@@ -273,6 +282,7 @@ function layoutLabels() {
     if (B.y > bottom) B.y = bottom;
     for (const C of sorted.slice(i + 1)) if (hOverlap(B, C) && B.y > C.y - H - GAP) B.y = C.y - H - GAP;
   }
+  for (const B of sorted) { dodgeBox(B); B.x = Math.min(B.x, size.x - B.w + r - 4); }
   return Object.fromEntries(all.map((a) => [a.id, { dx: a.x - a.p.x, dy: a.y - a.p.y }]));
 }
 

@@ -1,6 +1,6 @@
 # Estat del Mar
 
-App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i millor hora per nedar a 14 platges, de l'Escala a Lloret.
+App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i millor hora per nedar a 16 punts de bany, del Cap de Creus a Lloret.
 
 - **Dades**: Open-Meteo Marine (onades i temperatura de l'aigua) + Open-Meteo Forecast amb el model AROME (vent i ratxes).
 - **Valor afegit**: l'onada de mar obert es corregeix segons cap on mira cada platja, i un índex de nedada de 0 a 10 combina onada i vent.

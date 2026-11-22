@@ -28,10 +28,12 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 - Boies (estudi a `PLA.md` §7): Cap de Begur (Puertos del Estado, 2798) es pot llegir directament des del navegador (API interna de Portus, CORS obert). Palamós (1718) no té dades. Les d'ICATMAR (Cap de Creus, Tordera; Montgó i Medes, d'estiu) rebutgen el navegador: caldria un intermediari.
 - Futur: Meteocat (vent costaner i avisos). La clau de Meteocat, si mai s'usa aquí, **mai al repo** (repo públic): aniria com a secret d'un Cloudflare Worker.
 
-## Platges (14, de nord a sud)
-Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, La Fosca, Palamós (Platja Gran), Sant Antoni, Sant Feliu, Tossa, Lloret.
+## Platges (16, de nord a sud)
+Cap de Creus, Cap Norfeu, Montgó, L'Estartit, Sa Riera, Sa Tuna, Aiguablava, Tamariu, Llafranc, Calella, La Fosca, Palamós (Platja Gran), Sant Antoni, Sant Feliu, Tossa, Lloret.
 - `facing` = cap on mira la platja (graus), `open` = mitja obertura del sector obert, `sea` = punt del mapa ~150 m mar endins, revisat sobre el mapa ampliat.
 - Orientacions revisades totes sobre el mapa (OSM, zoom 14-15) el 21/11/2026 amb `tools/check-points.html`. Canvis: Montgó 80→100° (±30, la cala s'obre a l'ESE i el cap de Montgó la tapa del N-NE; coordenades de la platja corregides), Aiguablava 80→15° (±30, s'obre al N-NE; el punt queia damunt del Parador), Tamariu 100→120° (±50), Calella 150→125° (±50, el S-SO el tapa la costa fins al Cap Roig), La Fosca 160→125° (±45, el Cap Gros la tapa del S), Sant Antoni 160→145° (±60). L'Estartit moguda a petició de l'usuari al punt on neden, davant del port i de Cala Calella (42.0549, 3.2164; obert ±75° cap a l'E, estimat d'una captura). La resta ja quadraven. Falten validar amb l'experiència de l'usuari.
+- 22/11/2026, a partir de punts desats per l'usuari (coordenades de les captures, ±50 m): nous **Cap de Creus** (42.308, 3.314; al sud del cap, mira 135° ±80, el cap el tapa del N) i **Cap Norfeu** (42.236, 3.249; al sud del cap, mira 170° ±90); **L'Estartit** a 42.0558, 3.2143 (al costat de Cala Calella); **Tamariu** a 41.917, 3.209 (mig de la badia); **Sant Antoni** a 41.8355, 3.0957 (davant de la Cala dels Capellans / l'Embarcador, costa rocosa N-S: mira 115° ±80). Per a aquestes, `lat/lon` (on es demanen les dades) = `sea` (el punt on neden).
+- Les etiquetes esquiven el requadre de la temperatura de l'aigua (`dodgeBox` a `layoutLabels`).
 - Si s'afegeix una platja, `cachedMarine()` descarta les dades desades automàticament (comprova que hi siguin totes).
 
 ## Criteris decidits per l'usuari
