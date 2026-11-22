@@ -52,3 +52,6 @@
 {"boia":"begur","t":1795312800,"hs":1.29,"dir":210,"tp":5.1,"sst":17.1,"m":{"main":1.18,"ecmwf":1.36,"gfs":1.7,"dwd":1.52},"msst":17,"m24":null}
 {"boia":"creus","t":1795312800,"hs":1.09,"dir":171,"tp":2.6,"sst":17.1,"m":{"main":1.14,"ecmwf":1.02,"gfs":1.14,"dwd":1.94},"msst":17.3,"m24":null}
 {"boia":"tordera","t":1795312800,"hs":0.81,"dir":187,"tp":2.7,"sst":17.7,"m":{"main":0.74,"ecmwf":0.86,"gfs":1.16,"dwd":0.92},"msst":17.6,"m24":null}
+{"boia":"creus","t":1795316400,"hs":1,"dir":169,"tp":2.7,"sst":17.2,"m":{"main":1.16,"ecmwf":1.04,"gfs":1.16,"dwd":2.08},"msst":17.3,"m24":null}
+{"boia":"tordera","t":1795316400,"hs":0.95,"dir":191,"tp":2.7,"sst":17.7,"m":{"main":0.78,"ecmwf":0.94,"gfs":1.26,"dwd":1.08},"msst":17.5,"m24":null}
+{"boia":"begur","t":1795320000,"hs":1.29,"dir":213,"tp":4.9,"sst":17.1,"m":{"main":1.28,"ecmwf":1.5,"gfs":1.92,"dwd":1.72},"msst":17.1,"m24":null}
