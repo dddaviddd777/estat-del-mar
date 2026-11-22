@@ -1,6 +1,7 @@
 // Registre de calibratge: cada hora (GitHub Action) desa què mesuren les boies i què deia cada model
 // d'onades per a aquella hora i lloc, i escriu un resum petit que l'app llegeix.
-// Temporal: deixa de registrar a partir de FINS.
+// També escriu boies.json: l'última lectura de cada boia, perquè l'app ensenyi les d'ICATMAR (que el navegador no pot llegir).
+// Temporal: el registre i el resum s'aturen a partir de FINS; boies.json se segueix escrivint mentre el workflow corri.
 // Ús: node tools/calibra.js <carpeta-de-dades>   (sense dependències, Node 20+)
 const fs = require('fs');
 const path = require('path');
@@ -38,7 +39,8 @@ async function readPortus(b) {
   const v = {};
   for (const d of j.datos || []) if (!d.averia && d.valor != null) v[d.nombreColumna] = Number(d.valor) / (d.factor || 1);
   const t = Date.parse(j.fecha.replace(' ', 'T').replace(/\.0$/, '') + 'Z') / 1000;
-  return v.hm0 == null ? [] : [{ t, hs: v.hm0, dir: v.dmd ?? null, tp: v.tp ?? null, sst: v.ts2 ?? null }];
+  // lat/lon: posició GPS de la boia en aquesta lectura (gira al voltant de l'ancoratge).
+  return v.hm0 == null ? [] : [{ t, hs: v.hm0, dir: v.dmd ?? null, tp: v.tp ?? null, sst: v.ts2 ?? null, lat: v.lat ?? null, lon: v.lon ?? null }];
 }
 
 // ERDDAP d'ICATMAR: una dada cada ~20 min i ~1-2 h de retard. Agafem, per a cada hora en punt, la lectura més propera (±15 min).
@@ -62,6 +64,12 @@ async function readIcatmar(b) {
     const c = near(ctd, t, 1800); // la temperatura canvia a poc a poc: n'hi ha prou amb ±30 min
     const tempKey = c && Object.keys(c).find((k) => /^TEMP/.test(k));
     out.push({ t, hs: Number(w.VHM0_WAVE), dir: Number(w.VMDR_WAVE) || null, tp: Number(w.VTPK_WAVE) || null, sst: tempKey ? Number(c[tempKey]) : null });
+  }
+  // Per a boies.json: la lectura més recent tal com és (no arrodonida a l'hora en punt).
+  const w = wave.filter((r) => Number(r.VHM0_WAVE) >= 0).at(-1);
+  if (w) {
+    const t = Math.round(Date.parse(w.time) / 1000), c = near(ctd, t, 1800), tempKey = c && Object.keys(c).find((k) => /^TEMP/.test(k));
+    out.latest = { t, hs: Number(w.VHM0_WAVE), dir: Number(w.VMDR_WAVE) || null, tp: Number(w.VTPK_WAVE) || null, sst: tempKey ? Number(c[tempKey]) : null };
   }
   return out;
 }
@@ -114,9 +122,12 @@ function summarize(rows) {
 
 // ---------- Principal ----------
 (async () => {
-  if (new Date().toISOString().slice(0, 10) > FINS) { console.log(`Calibratge acabat (${FINS}). No es registra res.`); return; }
+  const acabat = new Date().toISOString().slice(0, 10) > FINS;
   fs.mkdirSync(DIR, { recursive: true });
   const fReg = path.join(DIR, 'registre.jsonl'), fPend = path.join(DIR, 'previsions.json'), fRes = path.join(DIR, 'resum.json');
+  const fBoies = path.join(DIR, 'boies.json');
+  // Última lectura de cada boia (si una falla, es queda la que hi havia).
+  const ultimes = fs.existsSync(fBoies) ? JSON.parse(fs.readFileSync(fBoies, 'utf8')).boies || {} : {};
   const rows = fs.existsSync(fReg) ? fs.readFileSync(fReg, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
   const have = new Set(rows.map((r) => `${r.boia}|${r.t}`));
   // Previsions fetes ~24 h abans per a cada hora i boia: quan arriba la mesura, les comparem (és el que mires el dia abans).
@@ -127,6 +138,12 @@ function summarize(rows) {
   for (const b of BOIES) {
     try {
       const [lect, at] = await Promise.all([b.font === 'portus' ? readPortus(b) : readIcatmar(b), modelSeries(b)]);
+      const last = lect.latest ?? lect.reduce((a, l) => (!a || l.t > a.t ? l : a), null);
+      if (last) {
+        ultimes[b.id] = { nom: b.nom, font: b.font === 'portus' ? 'Puertos del Estado' : 'ICATMAR', lat: round(last.lat ?? b.lat, 4), lon: round(last.lon ?? b.lon, 4),
+          t: last.t, hs: round(last.hs), dir: round(last.dir, 0), tp: round(last.tp, 1), sst: round(last.sst, 1), m: at(Math.round(last.t / HOUR) * HOUR)?.m ?? null };
+      }
+      if (acabat) continue;
       for (const l of lect) {
         const key = `${b.id}|${l.t}`;
         if (have.has(key)) continue;
@@ -144,6 +161,8 @@ function summarize(rows) {
       console.log(`${b.nom}: error ${e.message}`);
     }
   }
+  fs.writeFileSync(fBoies, JSON.stringify({ actualitzat: new Date().toISOString(), boies: ultimes }, null, 1));
+  if (acabat) { console.log(`Calibratge acabat (${FINS}): només s'actualitza boies.json.`); return; }
   // Les previsions de fa més de 2 dies ja no s'aparellaran amb cap lectura.
   for (const k of Object.keys(pend)) if (Number(k.split('|')[1]) < now - 48 * HOUR) delete pend[k];
 

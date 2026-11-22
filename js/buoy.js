@@ -70,5 +70,25 @@ export async function fetchCalib({ force = false } = {}) {
   return data;
 }
 
+// Última lectura de les boies d'ICATMAR (Cap de Creus, Tordera), que el navegador no pot llegir directament:
+// la mateixa Action la desa cada hora a boies.json (arriben amb ~2 h de retard).
+const URL_BOIES = 'https://raw.githubusercontent.com/dddaviddd777/estat-del-mar/calibratge/boies.json';
+export const OTHER_BUOYS = ['creus', 'tordera'];
+
+export function cachedOthers() {
+  return store.get('boies', null);
+}
+
+export async function fetchOthers({ force = false } = {}) {
+  const c = cachedOthers();
+  if (!force && c && Date.now() - c.fetchedAt < TTL) return c;
+  const r = await fetch(URL_BOIES, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`GitHub ha respost ${r.status}`);
+  const j = await r.json();
+  const data = { fetchedAt: Date.now(), boies: j.boies || {} };
+  store.set('boies', data);
+  return data;
+}
+
 // El registre que abans es desava al mòbil ara el fa GitHub per a tothom: l'esborrem.
 if (store.get('buoyLog')) store.set('buoyLog', undefined);

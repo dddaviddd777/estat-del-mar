@@ -27,7 +27,7 @@ App web instal·lable (PWA) per a nedadors de la Costa Brava: onades, vent i mil
 - Temperatura de l'aigua: requadre al mapa (dalt a l'esquerra, sobre terra), mitjana de les platges amb escala de color (`sstColor`).
 - Boies (estudi a `PLA.md` §7): Cap de Begur (Puertos del Estado, 2798) es pot llegir directament des del navegador (API interna de Portus, CORS obert). Palamós (1718) no té dades. Les d'ICATMAR (Cap de Creus, Tordera; Montgó i Medes, d'estiu) rebutgen el navegador: caldria un intermediari.
 - Boia de Begur al mapa (22/11/2026): rombe petit blanc amb vora fosca (`.buoy-dot`, `renderBuoyDot` a `app.js`), a la **posició GPS de l'última lectura** (`lat`/`lon` que dona Portus a cada lectura; la boia gira al voltant de l'ancoratge, s'ha vist a ~1,5 km del punt nominal `BUOY`). Nom i onada mesurada en passar-hi; clic → targeta de la boia.
-- Cap de Creus i Tordera (ICATMAR) ja es llegeixen cada hora a la GitHub Action (`registre.jsonl` a la branca `calibratge`), però l'app encara no les ensenya.
+- Cap de Creus i Tordera (ICATMAR), des del 22/11/2026 a l'app: la GitHub Action (`tools/calibra.js`) desa cada hora l'última lectura de les 3 boies a `boies.json` (branca `calibratge`; se segueix escrivint després de `FINS`). L'app el llegeix (`fetchOthers` a `buoy.js`, TTL 20 min): rombe al mapa a la posició de cada boia i bloc "Altres boies" a la targeta de la boia (onada, direcció, període, aigua, hora i el model de l'app). Arriben amb ~2 h de retard. Els rombes van sota les etiquetes (`zIndexOffset` negatiu).
 - Futur: Meteocat (vent costaner i avisos). La clau de Meteocat, si mai s'usa aquí, **mai al repo** (repo públic): aniria com a secret d'un Cloudflare Worker.
 
 ## Platges (16, de nord a sud)

@@ -1,7 +1,7 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach } from './marine.js';
 import * as store from './store.js';
-import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib } from './buoy.js';
+import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib, OTHER_BUOYS, fetchOthers, cachedOthers } from './buoy.js';
 
 const $ = (id) => document.getElementById(id);
 const nf1 = new Intl.NumberFormat('ca', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -39,10 +39,12 @@ function ago(ms) {
 let buoy = cachedBuoy();
 let buoyErr = null;
 let calib = cachedCalib();
+let others = cachedOthers();
 async function loadBuoy(force = false) {
-  const [b, c] = await Promise.allSettled([fetchBuoy({ force }), fetchCalib({ force })]);
+  const [b, c, o] = await Promise.allSettled([fetchBuoy({ force }), fetchCalib({ force }), fetchOthers({ force })]);
   if (b.status === 'fulfilled') { buoy = b.value; buoyErr = null; } else buoyErr = b.reason?.message;
   if (c.status === 'fulfilled') calib = c.value;
+  if (o.status === 'fulfilled') others = o.value;
   renderBuoy();
   if (selected) renderDetail();
 }
@@ -587,21 +589,47 @@ function calibBlock() {
     <p class="by-note">Error mitjà de l'onada en ${T.n} comparacions de 3 boies (Cap de Begur, Cap de Creus i Tordera) amb el que deia cada model per a aquella hora${n24 >= 6 ? `, i amb la previsió feta 24 h abans (${n24})` : ''}.${sst} Temporal, fins al ${fmt({ day: 'numeric', month: 'numeric', year: 'numeric' }).format(Date.parse(R.fins))}.</p>`;
 }
 
-// Punt discret al mapa amb la posició de la boia: la GPS de l'última lectura (gira al voltant de l'ancoratge) o la nominal.
-let buoyDot = null;
+// Punts discrets al mapa amb la posició de cada boia. Begur: la GPS de l'última lectura (gira al voltant de l'ancoratge)
+// o la nominal. Cap de Creus i Tordera (ICATMAR): la de boies.json, que desa la GitHub Action.
+const buoyDots = {};
+function placeBuoyDot(id, ll, tip) {
+  let d = buoyDots[id];
+  if (!d) {
+    d = buoyDots[id] = L.marker(ll, { icon: L.divIcon({ className: 'buoy-dot', iconSize: [10, 10], iconAnchor: [5, 5] }), keyboard: false, zIndexOffset: -2000 }) // sota les etiquetes
+      .bindTooltip('', { direction: 'top', offset: [0, -6] })
+      .on('click', () => $(id === 'begur' ? 'buoyCard' : 'buoyOthers')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+      .addTo(map);
+  } else d.setLatLng(ll);
+  d.setTooltipContent(tip);
+}
 function renderBuoyDot() {
   if (!map) return;
   const r = buoy?.reading;
   const gps = r?.lat != null && r?.lon != null;
-  const ll = gps ? [r.lat, r.lon] : [BUOY.lat, BUOY.lon];
-  const tip = `Boia del ${BUOY.name} (Puertos del Estado)${gps ? ` · posició GPS de les ${hh(r.t)} h` : ''}${r?.hs != null ? ` · ${nf2.format(r.hs)} m mesurats` : ''}`;
-  if (!buoyDot) {
-    buoyDot = L.marker(ll, { icon: L.divIcon({ className: 'buoy-dot', iconSize: [10, 10], iconAnchor: [5, 5] }), keyboard: false, zIndexOffset: 1500 })
-      .bindTooltip('', { direction: 'top', offset: [0, -6] })
-      .on('click', () => $('buoyCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-      .addTo(map);
-  } else buoyDot.setLatLng(ll);
-  buoyDot.setTooltipContent(tip);
+  placeBuoyDot('begur', gps ? [r.lat, r.lon] : [BUOY.lat, BUOY.lon],
+    `Boia del ${BUOY.name} (Puertos del Estado)${gps ? ` · posició GPS de les ${hh(r.t)} h` : ''}${r?.hs != null ? ` · ${nf2.format(r.hs)} m mesurats` : ''}`);
+  for (const id of OTHER_BUOYS) {
+    const o = others?.boies?.[id];
+    if (!o || o.lat == null) continue;
+    placeBuoyDot(id, [o.lat, o.lon], `Boia del ${o.nom} (${o.font})${o.hs != null ? ` · ${nf2.format(o.hs)} m mesurats a les ${hh(o.t)} h` : ''}`);
+  }
+}
+
+// Bloc "Altres boies" de la targeta: l'última lectura de Cap de Creus i Tordera i què deia el model de l'app.
+function othersBlock() {
+  const list = OTHER_BUOYS.map((id) => others?.boies?.[id]).filter((o) => o?.hs != null);
+  if (!list.length) return '';
+  return `<div class="by-h" id="buoyOthers">Altres boies (ICATMAR)</div>
+    <ul class="by-models by-others">${list.map((o) => {
+      const old = Date.now() / 1000 - o.t > 6 * 3600;
+      const main = o.m?.main;
+      return `<li>
+        <span>${o.nom}<small>${dayLabel(o.t) === 'Avui' ? '' : dayLabel(o.t).toLowerCase() + ' '}${hh(o.t)} h · ${ago(o.t * 1000)}${old ? ' · antiga' : ''}</small></span>
+        <em>${nf2.format(o.hs)} m</em>
+        <i>${o.dir != null ? `del ${windName(o.dir)}` : ''}${o.tp ? ` · ${nf1.format(o.tp)} s` : ''}${o.sst != null ? ` · ${nf1.format(o.sst)} °C` : ''}${main != null ? `<br>model: ${nf2.format(main)} m (${signed(main - o.hs)})` : ''}</i>
+      </li>`;
+    }).join('')}</ul>
+    <p class="by-note">Arriben amb unes 2 h de retard: les llegeix cada hora el procés de calibratge.</p>`;
 }
 
 function renderBuoy() {
@@ -610,7 +638,7 @@ function renderBuoy() {
   if (!el) return; // index.html antic encara a la memòria del navegador
   if (!buoy?.reading) {
     el.hidden = !buoyErr;
-    if (buoyErr) el.innerHTML = `<h2>Boia del ${BUOY.name}</h2><p class="by-note">No s'ha pogut llegir la boia: ${buoyErr}</p>${calibBlock()}`;
+    if (buoyErr) el.innerHTML = `<h2>Boia del ${BUOY.name}</h2><p class="by-note">No s'ha pogut llegir la boia: ${buoyErr}</p>${othersBlock()}${calibBlock()}`;
     return;
   }
   el.hidden = false;
@@ -631,7 +659,7 @@ function renderBuoy() {
         <i>${signed(x.hs - r.hs)} m${x === best ? ' · més encertat' : ''}</i>
       </li>`).join('')}</ul>`;
   }
-  models += calibBlock();
+  models += othersBlock() + calibBlock();
 
   el.innerHTML = `
     <h2>Boia ${BUOY.name} <span>mesurat, ${BUOY.km} km mar endins</span></h2>
