@@ -173,21 +173,23 @@ function initMap() {
   restorePts();
 }
 
-// Mida de cada etiqueta (nota + nom + onada + vent), per poder-les col·locar sense que es trepitgin.
-// Ha de coincidir amb .bm .pill a css/mar.css.
-const PILL_H = 26, R = PILL_H / 2, WAVE_W = 52, WIND_W = 40;
+// Mida de cada etiqueta (nota + nom + onada i vent apilats), per poder-les col·locar sense que es trepitgin.
+// Ha de coincidir amb .bm .pill a css/mar.css: alçada PILL_H, cercle de 28 px a 2 px de la vora (centre a R), columna DATA_W.
+const PILL_H = 32, R = PILL_H / 2, DATA_W = 62;
 const measureCtx = document.createElement('canvas').getContext('2d');
 function pillWidth(b) {
   measureCtx.font = '500 12px Outfit, system-ui, sans-serif';
-  return PILL_H + 5 + measureCtx.measureText(b.short).width + 5 + WAVE_W + 4 + WIND_W + 3;
+  return 2 + 28 + 5 + measureCtx.measureText(b.short).width + 5 + DATA_W + 3;
 }
 
 /**
  * Etiqueta d'una platja (o del punt triat). Cada dada té la seva forma, perquè no es confonguin:
- * cercle de color = nota per nedar (l'únic amb el color del semàfor) · pastilla blava = onada a la platja
- * i cap on va · pastilla del vent = km/h, cap on bufa i color segons la força.
+ * cercle de color = nota per nedar (l'únic amb el color del semàfor) · a la dreta, apilades: pastilla blava = onada
+ * a la platja i cap on va (icona d'ones) · pastilla del vent = km/h, cap on bufa i color segons la força (icona de vent).
  */
 const ARROW = '<svg viewBox="0 0 18 18" aria-hidden="true" style="transform:rotate(ROTdeg)"><path d="M9 1l5 12-5-3-5 3z"/></svg>';
+const WAVE_ICO = '<svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4.5q1.25-1.6 2.5 0t2.5 0 2.5 0 2.5 0M1 8.5q1.25-1.6 2.5 0t2.5 0 2.5 0 2.5 0"/></svg>';
+const WIND_ICO = '<svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4h6.5a1.6 1.6 0 1 0-1.6-1.6M1 6.5h9a1.6 1.6 0 1 1-1.6 1.6M1 9h4"/></svg>';
 function pillHtml(b, h, a, mini = lbl.mini) {
   const score = a.score >= 9.95 ? '10' : nf1.format(a.score);
   if (mini) return `<b class="sc" style="--c:${LEVELS[a.level].color}" title="${esc(b.name)}: nota ${nf1.format(a.score)} de 10, onada ${a.beachHs == null ? '—' : m(a.beachHs)} m, vent ${h.wind == null ? '—' : Math.round(h.wind)} km/h">${score}</b>`;
@@ -195,21 +197,23 @@ function pillHtml(b, h, a, mini = lbl.mini) {
   const waveRot = ((wdir ?? 0) + 180) % 360, windRot = ((h.windDir ?? 0) + 180) % 360;
   return `<b class="sc" style="--c:${LEVELS[a.level].color}" title="Nota per nedar: ${nf1.format(a.score)} de 10 (${LEVELS[a.level].label.toLowerCase()})">${score}</b>
     <span class="nm">${esc(b.short)}</span>
-    <span class="wv" title="Onada a la platja: ${m(a.beachHs)} m${wdir != null ? `, ve del ${windName(wdir)}` : ''}">${wdir != null ? ARROW.replace('ROT', waveRot) : ''}${a.beachHs == null ? '—' : m(a.beachHs)}<small>m</small></span>
-    <span class="wind" style="--w:${LEVELS[a.windLevel].color}" title="Vent ${REL[a.rel]}: ${h.wind == null ? '—' : Math.round(h.wind)} km/h del ${windName(h.windDir)}">${ARROW.replace('ROT', windRot)}${h.wind == null ? '—' : Math.round(h.wind)}</span>`;
+    <span class="st">
+      <span class="wv" title="Onada a la platja: ${m(a.beachHs)} m${wdir != null ? `, ve del ${windName(wdir)}` : ''}">${WAVE_ICO}${wdir != null ? ARROW.replace('ROT', waveRot) : ''}${a.beachHs == null ? '—' : m(a.beachHs)}<small>m</small></span>
+      <span class="wind" style="--w:${LEVELS[a.windLevel].color}" title="Vent ${REL[a.rel]}: ${h.wind == null ? '—' : Math.round(h.wind)} km/h del ${windName(h.windDir)}">${WIND_ICO}${ARROW.replace('ROT', windRot)}${h.wind == null ? '—' : Math.round(h.wind)}<small>km/h</small></span>
+    </span>`;
 }
 
 /**
  * Mida de les etiquetes segons l'espai que hi ha: com més allunyat és el zoom, més juntes queden les platges.
  * Amb prou lloc, mida normal; si van justes, s'encongeixen (fins al 70 %); si ni així hi caben, només la nota
  * (cercle de color). En acostar-se tornen a créixer. `per` = píxels d'alçada per etiqueta: la columna d'etiquetes
- * pot ser una mica més llarga que la costa (×1,6 + 60 px), però no tant que quedin lluny de la seva platja.
+ * pot ser una mica més llarga que la costa (×2 + 60 px), però no tant que quedin lluny de la seva platja.
  */
 const lbl = { s: 1, mini: false };
 function labelMode(ys, mapH) {
   if (ys.length < 2) return { s: 1, mini: false };
   const span = Math.max(...ys) - Math.min(...ys);
-  const per = Math.min(mapH - 30, span * 1.6 + 60) / ys.length, need = PILL_H + 3;
+  const per = Math.min(mapH - 30, span * 2 + 60) / ys.length, need = PILL_H + 3;
   if (per >= need * 0.92) return { s: 1, mini: false }; // una mica justes encara caben (el repàs les separa)
   if (per >= need * 0.7) return { s: Math.round((per / need) * 20) / 20, mini: false };
   return { s: per >= need * 0.45 ? 0.85 : 0.7, mini: true };
