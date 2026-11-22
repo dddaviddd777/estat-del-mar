@@ -1,0 +1,56 @@
+{
+ "actualitzat": "2026-11-22T17:11:52.584Z",
+ "boies": {
+  "begur": {
+   "nom": "Cap de Begur",
+   "font": "Puertos del Estado",
+   "lat": 41.9108,
+   "lon": 3.6412,
+   "t": 1795366800,
+   "hs": 2.34,
+   "dir": 277,
+   "tp": 8,
+   "sst": 16.7,
+   "m": {
+    "main": 1.62,
+    "ecmwf": 2.06,
+    "gfs": 2.6,
+    "dwd": 2.36
+   }
+  },
+  "creus": {
+   "nom": "Cap de Creus",
+   "font": "ICATMAR",
+   "lat": 42.3212,
+   "lon": 3.3495,
+   "t": 1795361580,
+   "hs": 1.96,
+   "dir": 319,
+   "tp": 3.7,
+   "sst": 17.2,
+   "m": {
+    "main": 1.1,
+    "ecmwf": 1.54,
+    "gfs": 1.14,
+    "dwd": 2.22
+   }
+  },
+  "tordera": {
+   "nom": "Tordera",
+   "font": "ICATMAR",
+   "lat": 41.5997,
+   "lon": 2.7698,
+   "t": 1795361460,
+   "hs": 1.14,
+   "dir": 191,
+   "tp": 3,
+   "sst": 17.6,
+   "m": {
+    "main": 0.96,
+    "ecmwf": 1.22,
+    "gfs": 1.26,
+    "dwd": 1.08
+   }
+  }
+ }
+}
