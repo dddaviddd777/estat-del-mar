@@ -130,4 +130,12 @@
 {"boia":"creus","t":1795417200,"hs":2.29,"dir":339,"tp":4.2,"sst":17,"m":{"main":0.7,"ecmwf":1.2,"gfs":1.1,"dwd":1.84},"msst":17.1,"m24":{"main":0.72,"ecmwf":0.94,"gfs":0.84,"dwd":1.96}}
 {"boia":"tordera","t":1795417200,"hs":0.74,"dir":157,"tp":2.9,"sst":17.5,"m":{"main":0.46,"ecmwf":0.52,"gfs":0.64,"dwd":0.52},"msst":17.4,"m24":{"main":0.34,"ecmwf":0.5,"gfs":0.64,"dwd":0.48}}
 {"boia":"begur","t":1795420800,"hs":2.34,"dir":348,"tp":7,"sst":16.1,"m":{"main":1.2,"ecmwf":1.94,"gfs":2.34,"dwd":2.8},"msst":16.9,"m24":null}
+{"boia":"creus","t":1795420800,"hs":1.97,"dir":339,"tp":4,"sst":16.9,"m":{"main":0.94,"ecmwf":1.32,"gfs":1.12,"dwd":1.84},"msst":17.1,"m24":null}
+{"boia":"tordera","t":1795420800,"hs":0.66,"dir":143,"tp":2.8,"sst":17.4,"m":{"main":0.48,"ecmwf":0.5,"gfs":0.64,"dwd":0.52},"msst":17.3,"m24":null}
+{"boia":"tordera","t":1795424400,"hs":0.75,"dir":126,"tp":2.8,"sst":17.5,"m":{"main":0.46,"ecmwf":0.5,"gfs":0.66,"dwd":0.5},"msst":17.3,"m24":{"main":0.32,"ecmwf":0.48,"gfs":0.62,"dwd":0.46}}
 {"boia":"begur","t":1795428000,"hs":1.99,"dir":344,"tp":6.3,"sst":16.1,"m":{"main":1.24,"ecmwf":2.06,"gfs":2.16,"dwd":2.82},"msst":16.9,"m24":{"main":1.22,"ecmwf":1.76,"gfs":2.02,"dwd":2.54}}
+{"boia":"creus","t":1795428000,"hs":2.19,"dir":344,"tp":4,"sst":16.9,"m":{"main":0.98,"ecmwf":1.32,"gfs":1.06,"dwd":1.96},"msst":17.1,"m24":{"main":0.74,"ecmwf":1.22,"gfs":0.84,"dwd":1.8}}
+{"boia":"tordera","t":1795428000,"hs":0.7,"dir":117,"tp":2.8,"sst":17.5,"m":{"main":0.44,"ecmwf":0.48,"gfs":0.66,"dwd":0.5},"msst":17.4,"m24":{"main":0.32,"ecmwf":0.46,"gfs":0.64,"dwd":0.44}}
+{"boia":"creus","t":1795431600,"hs":1.99,"dir":338,"tp":3.9,"sst":16.8,"m":{"main":0.98,"ecmwf":1.26,"gfs":1.04,"dwd":1.9},"msst":17.1,"m24":{"main":0.76,"ecmwf":1.2,"gfs":0.94,"dwd":1.7}}
+{"boia":"tordera","t":1795431600,"hs":0.66,"dir":122,"tp":3,"sst":17.5,"m":{"main":0.44,"ecmwf":0.48,"gfs":0.68,"dwd":0.5},"msst":17.4,"m24":{"main":0.3,"ecmwf":0.44,"gfs":0.66,"dwd":0.44}}
+{"boia":"begur","t":1795435200,"hs":2.11,"dir":349,"tp":6.6,"sst":16.2,"m":{"main":1.62,"ecmwf":1.98,"gfs":2.02,"dwd":2.54},"msst":16.9,"m24":null}
