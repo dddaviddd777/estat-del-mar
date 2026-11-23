@@ -2,6 +2,8 @@ import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, lo
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts } from './marine.js';
 import * as store from './store.js';
 import { initLayers, setLayersTime } from './layers.js';
+import { initMapPanel, showKind } from './mappanel.js';
+import { initPlaces } from './places.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib, OTHER_BUOYS, fetchOthers, cachedOthers } from './buoy.js';
 import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute, alertsHtml, startRouteAt, addPointAt, hasRoute } from './routeui.js';
 
@@ -171,21 +173,13 @@ function initMap() {
   }).addTo(map);
   L.control.zoom({ position: 'topleft' }).addTo(map);
   // Ruta de nedada (botó sota el zoom): dibuix, línia de colors i fitxa, a js/routeui.js.
-  initRoutes(map, { closeDetail, wide, dayLabel, times: () => data?.times ?? [] });
-  // Botó per amagar (o tornar a ensenyar) les etiquetes de platges i punts i les boies: deixa només la ruta.
-  const Marks = L.Control.extend({
-    onAdd() {
-      const el = L.DomUtil.create('div', 'leaflet-bar marks-ctl');
-      el.innerHTML = '<a href="#" role="button"></a>';
-      L.DomEvent.disableClickPropagation(el);
-      L.DomEvent.on(el.firstChild, 'click', (e) => { L.DomEvent.preventDefault(e); setMarksHidden(!store.get('hideMarks', false)); });
-      return el;
-    },
-  });
-  new Marks({ position: 'topleft' }).addTo(map);
-  setMarksHidden(store.get('hideMarks', false));
-  // Capes d'onades i vent (a l'estil del Windy), amb el seu botó a sota de l'ull.
+  // `routeUsed`: si l'usuari dibuixa o obre la ruta i l'havia amagat al panell del mapa, torna a sortir.
+  initRoutes(map, { closeDetail, wide, dayLabel, times: () => data?.times ?? [], routeUsed: () => showKind('ruta') });
+  // Capes d'onades i vent (a l'estil del Windy), coves i fars, i el panell «Mapa» (botó sota el de la ruta) per triar
+  // què es veu: capes, platges, punts, boies, sortides, ports, coves, fars i la ruta.
   initLayers(map, { time: () => data.times[idx] });
+  initPlaces(map);
+  initMapPanel(map, { buoyIco: BUOY_ICO });
   // Temperatura de l'aigua de tota la costa, al racó de dalt a l'esquerra (és terra: no tapa cap etiqueta), per sobre
   // dels botons: així el menú de capes, que s'obre a la dreta del seu botó, no queda tapat.
   const Sst = L.Control.extend({
@@ -230,20 +224,6 @@ function initMap() {
     openCtxMenu(e.latlng);
   });
   restorePts();
-}
-
-const EYE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>';
-const EYE_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5l17 17M10.6 5.6A10 10 0 0 1 12 5.5c6.4 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.6 6.7C3.7 8.5 2 12 2 12s3.6 6.5 10 6.5a9.6 9.6 0 0 0 4.2-.9M9.9 9.9a2.8 2.8 0 0 0 4.2 4.2"/></svg>';
-/** Amaga o ensenya les etiquetes de platges i punts propis i les boies (es recorda per a la pròxima vegada). */
-function setMarksHidden(off) {
-  store.set('hideMarks', off);
-  document.body.classList.toggle('marks-off', off);
-  const a = document.querySelector('.marks-ctl a');
-  if (!a) return;
-  a.innerHTML = off ? EYE_OFF : EYE;
-  a.title = off ? 'Ensenya les platges i els punts' : 'Amaga les platges i els punts';
-  a.setAttribute('aria-label', a.title);
-  a.classList.toggle('on', off);
 }
 
 /** Menú del clic dret (o de mantenir premut al mòbil). */
@@ -419,7 +399,7 @@ function renderMarkers() {
     const { dx, dy } = off[b.id];
     const html = `<div class="bm ${selected === b.id ? 'sel' : ''}">
         <span class="pill ${lbl.mini ? 'mini' : ''}" style="${pillPos({ dx, dy })}">${pillHtml(b, h, a)}</span></div>`;
-    markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
+    markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap bm-beach', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
   }
   renderPtMarkers();
 }
@@ -556,7 +536,7 @@ function renderPtMarker(id) {
   const o = labelOff[id] ?? { dx: 12 + R, dy: 0 };
   const html = `<div class="bm pt ${b.saved ? 'saved' : ''} ${selected === id ? 'sel' : ''}"><i class="pt-dot"></i>
     <span class="pill ${lbl.mini ? 'mini' : ''}" style="${pillPos(o)}">${body}</span></div>`;
-  const icon = L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] });
+  const icon = L.divIcon({ className: 'bm-wrap bm-pt', html, iconSize: [0, 0], iconAnchor: [0, 0] });
   if (!p.marker) {
     p.marker = L.marker([b.lat, b.lon], { icon, keyboard: true, title: b.name, zIndexOffset: b.saved ? 900 : 1000 })
       .on('click', () => openDetail(id)).addTo(map);

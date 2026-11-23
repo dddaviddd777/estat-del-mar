@@ -283,12 +283,10 @@ a.icon-btn { color: inherit; text-decoration: none; }
 .route-ctl a { display: grid; place-items: center; color: #0b1d2c; }
 .route-ctl a:hover { color: #d93025; }
 body.routing .route-ctl a { color: #d93025; }
-/* Dibuixant (o amb el botó de l'ull): fora etiquetes i boies, creu al centre del mapa i barra de botons a baix. */
-body.routing .bm-wrap, body.routing .buoy-dot,
-body.marks-off .bm-wrap, body.marks-off .buoy-dot { display: none; }
-.marks-ctl a { display: grid; place-items: center; color: #0b1d2c; }
-.marks-ctl a:hover { color: #1a73e8; }
-.marks-ctl a.on { color: #1a73e8; background: #e8f0fe; }
+/* Dibuixant: fora etiquetes i boies, creu al centre del mapa i barra de botons a baix. */
+body.routing .bm-wrap, body.routing .buoy-dot { display: none; }
+/* Panell «Mapa»: el que l'usuari ha amagat */
+body.hide-platges .bm-beach, body.hide-punts .bm-pt, body.hide-boies .buoy-dot { display: none; }
 /* Menú del clic dret / mantenir premut */
 .ctx-pop .leaflet-popup-content-wrapper { padding: 4px; border-radius: 10px; }
 .ctx-pop .leaflet-popup-content { margin: 0; }
@@ -408,18 +406,35 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .layers-ctl > a { display: grid; place-items: center; color: #0b1d2c; }
 .layers-ctl > a:hover { color: #1a73e8; }
 .layers-ctl > a.on { color: #1a73e8; background: #e8f0fe; }
-.layers-panel { position: absolute; left: 40px; top: 0; width: 230px; padding: 10px 12px; background: #fff; color: #0b1d2c; border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .3); font-size: 13px; z-index: 1001; }
-.layers-panel b { display: block; font-size: 13px; margin-bottom: 6px; }
-.layers-panel label { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; }
-.layers-panel label small { display: block; font-size: 11px; color: #5b6b78; }
+.layers-panel { position: absolute; left: 40px; top: 0; width: 250px; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 8px 12px 10px;
+  background: #fff; color: #0b1d2c; border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, .3); font-size: 13px; z-index: 1001; }
+.mp-top { display: flex; align-items: center; justify-content: space-between; }
+.mp-top b { font-size: 14px; }
+.mp-x { border: 0; background: none; font-size: 15px; color: #5b6b78; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.mp-x:hover { background: #eef3f8; }
+.mp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 2px; }
+.mp-chips button { font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 12px; border: 1px solid #c9d2da; background: #fff; color: #0b1d2c; cursor: pointer; }
+.mp-chips button:hover { background: #eef3f8; }
+.mp-chips button.on { background: #e8f0fe; border-color: #1a73e8; color: #174ea6; }
+.mp-h { font-size: 11px; font-weight: 600; color: #5b6b78; text-transform: uppercase; letter-spacing: .04em; margin: 9px 0 1px; }
+.mp-row { display: flex; align-items: center; gap: 9px; padding: 5px 0; cursor: pointer; border-top: 1px solid #edf0f3; }
+.mp-ico { flex: none; width: 20px; height: 20px; display: grid; place-items: center; }
+.mp-ico svg { display: block; width: 20px; height: 20px; }
+.mp-ico .mp-buoy svg { width: 16px; height: 18px; }
+.mp-grad { display: block; width: 18px; height: 18px; border-radius: 5px; }
+.mp-nm { flex: 1; min-width: 0; line-height: 1.2; }
+.mp-nm small { display: block; font-size: 11px; color: #5b6b78; }
 .layers-panel input { position: absolute; opacity: 0; pointer-events: none; }
-.layers-panel .sw { flex: none; width: 34px; height: 20px; border-radius: 10px; background: #c9d2da; position: relative; transition: background .15s; }
-.layers-panel .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
+.layers-panel .sw { flex: none; width: 32px; height: 18px; border-radius: 9px; background: #c9d2da; position: relative; transition: background .15s; }
+.layers-panel .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
 .layers-panel input:checked + .sw { background: #1a73e8; }
 .layers-panel input:checked + .sw::after { transform: translateX(14px); }
 .layers-panel input:focus-visible + .sw { outline: 2px solid #1a73e8; outline-offset: 2px; }
-.layers-panel p { margin: 6px 0 0; font-size: 11px; line-height: 1.35; color: #5b6b78; }
+.layers-panel p { margin: 8px 0 0; font-size: 11px; line-height: 1.35; color: #5b6b78; }
+/* Coves i fars al mapa */
+.place-dot { background: none; border: 0; }
+.place-dot svg { display: block; width: 18px; height: 18px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.exit-dot.port svg { width: 17px; height: 17px; }
 .fld-legend { position: absolute; left: 8px; bottom: 22px; z-index: 800; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px;
   background: rgba(255, 255, 255, .9); color: #0b1d2c; font: 600 10.5px/1.2 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
 .fld-legend div { display: grid; grid-template-columns: 40px 120px; align-items: center; column-gap: 6px; }

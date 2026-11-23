@@ -1,10 +1,10 @@
 // Service worker: permet obrir l'app sense connexió.
 // Les dades del mar NO es guarden aquí (les desa l'app amb la seva hora), només els fitxers de l'app.
 // La línia de costa i les sortides (data/costa.json, data/sortides*.json) es desen la primera vegada que es fan servir.
-const VERSION = 'mar-v21';
+const VERSION = 'mar-v22';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'css/mar.css', 'manifest.webmanifest',
-  'js/app.js', 'js/marine.js', 'js/store.js', 'js/buoy.js', 'js/coast.js', 'js/route.js', 'js/routeui.js', 'js/exits.js', 'js/layers.js',
+  'js/app.js', 'js/marine.js', 'js/store.js', 'js/buoy.js', 'js/coast.js', 'js/route.js', 'js/routeui.js', 'js/exits.js', 'js/layers.js', 'js/places.js', 'js/mappanel.js',
   'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

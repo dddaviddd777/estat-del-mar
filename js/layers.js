@@ -316,13 +316,8 @@ function readAt(ll) {
 }
 const nf1 = (v) => v.toFixed(1).replace('.', ',');
 
-// ---------- Botó i llegenda ----------
-const ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="m2.5 12.5 9.5 5 9.5-5"/><path d="m2.5 17 9.5 5 9.5-5"/></svg>';
-
+// ---------- Llegenda (el botó és al panell del mapa, js/mappanel.js) ----------
 function renderUi() {
-  ui.btn.classList.toggle('on', on.waves || on.wind);
-  ui.panel.querySelector('[data-l="waves"]').checked = on.waves;
-  ui.panel.querySelector('[data-l="wind"]').checked = on.wind;
   const lg = [];
   if (on.waves) lg.push(`<div><span>Onada</span><i style="background:${gradient(WAVE_STOPS, 4)}"></i><small><em>0</em><em>1</em><em>2</em><em>3</em><em>4 m</em></small></div>`);
   if (on.wind && !on.waves) lg.push(`<div><span>Vent</span><i style="background:${gradient(WIND_STOPS, 55)}"></i><small><em>0</em><em>20</em><em>40</em><em>55 km/h</em></small></div>`);
@@ -344,13 +339,16 @@ async function refresh() {
   startWind();
 }
 
-function setLayer(k, v) {
+/** Capes enceses ara mateix: { waves, wind }. */
+export const layersOn = () => ({ ...on });
+/** Encén o apaga una capa ('waves' o 'wind') i ho recorda. */
+export function setLayer(k, v) {
   on[k] = v;
   store.set('mapLayers', { ...on });
   refresh();
 }
 
-/** Crea les capes, el botó (amb el menú per triar-les) i la llegenda. */
+/** Crea les capes i la llegenda. */
 export function initLayers(m, c) {
   map = m; ctx = c;
   map.createPane('fieldPane').style.zIndex = 350; // sota la ruta (400) i les etiquetes (600)
@@ -361,33 +359,7 @@ export function initLayers(m, c) {
   windCv = L.DomUtil.create('canvas', 'fld-wind leaflet-zoom-hide', map.getPane('windPane'));
   waveCv.hidden = windCv.hidden = true;
 
-  const Ctl = L.Control.extend({
-    onAdd() {
-      const el = L.DomUtil.create('div', 'leaflet-bar layers-ctl');
-      el.innerHTML = `<a href="#" role="button" title="Capes: onades i vent" aria-label="Capes: onades i vent" aria-expanded="false">${ICO}</a>
-        <div class="layers-panel" hidden>
-          <b>Capes del mapa</b>
-          <label><input type="checkbox" data-l="waves"><span class="sw"></span><span>Onades<small>alçada (colors) i cap on van</small></span></label>
-          <label><input type="checkbox" data-l="wind"><span class="sw"></span><span>Vent<small>partícules que segueixen el vent</small></span></label>
-          <p>Mar endins, cel·les d'uns 8 km (Open-Meteo). A les cales, mireu les etiquetes de les platges. Segueixen l'hora de la barra.</p>
-        </div>`;
-      L.DomEvent.disableClickPropagation(el);
-      L.DomEvent.disableScrollPropagation(el);
-      const a = el.firstElementChild, panel = el.querySelector('.layers-panel');
-      L.DomEvent.on(a, 'click', (e) => {
-        L.DomEvent.preventDefault(e);
-        panel.hidden = !panel.hidden;
-        a.setAttribute('aria-expanded', String(!panel.hidden));
-      });
-      panel.addEventListener('change', (e) => { const k = e.target.dataset.l; if (k) setLayer(k, e.target.checked); });
-      ui = { btn: a, panel, el };
-      return el;
-    },
-  });
-  new Ctl({ position: 'topleft' }).addTo(map);
-  // Tancar el menú en tocar el mapa
-  map.on('click', () => { ui.panel.hidden = true; ui.btn.setAttribute('aria-expanded', 'false'); });
-
+  ui = {};
   ui.legend = L.DomUtil.create('div', 'fld-legend', map.getContainer());
   ui.read = L.DomUtil.create('div', 'fld-read', map.getContainer());
   ui.legend.hidden = ui.read.hidden = true;

@@ -1,0 +1,5 @@
+{
+  "nota": "Correccions a mà de les coves i els fars d'OSM. add: [lat, lon, tipus (cova o far), nom]. remove: [lat, lon] (treu el que hi hagi a menys de 40 m).",
+  "add": [],
+  "remove": []
+}

@@ -109,6 +109,7 @@ export function addPointAt(ll) {
   drawLive();
 }
 function startDraw(pts = []) {
+  ctx.routeUsed?.(); // si la ruta estava amagada al panell del mapa, en acabar ha de sortir
   closeSheet();
   ctx.closeDetail();
   drawing = { pts: pts.map((p) => L.latLng(p[0], p[1])), layer: L.layerGroup().addTo(map), edit: pts.length > 0, follow: !pts.length };
@@ -257,16 +258,28 @@ export function alertsHtml(list, note = true) {
 
 // ---------- Sortides al mapa ----------
 const EXIT_ZOOM = 13;
-const EXIT_ICO = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="4" fill="#1f9d55" stroke="#fff" stroke-width="1.6"/><path d="M8 11.5V5M5.2 7.6 8 4.8l2.8 2.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+export const EXIT_ICO = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="4" fill="#1f9d55" stroke="#fff" stroke-width="1.6"/><path d="M8 11.5V5M5.2 7.6 8 4.8l2.8 2.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+export const PORT_ICO = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="4" fill="#2f5d8a" stroke="#fff" stroke-width="1.6"/><path d="M8 4.6v7.2M6.2 6.2h3.6M4.6 9.4a3.4 3.4 0 0 0 6.8 0" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.2" r="1" fill="none" stroke="#fff" stroke-width="1.1"/></svg>';
+/** Quines sortides es veuen al mapa: les de platja, escala i rampa (`sortides`) i els ports (`ports`). */
+const exitKinds = { sortides: true, ports: true };
+export function setExitKinds(k) { Object.assign(exitKinds, k); if (map) renderExits(); }
+/** Amaga o ensenya la ruta dibuixada al mapa (la fitxa i el càlcul continuen igual). */
+export function setRouteShown(v) {
+  if (!map || !layer) return;
+  if (v && !map.hasLayer(layer)) layer.addTo(map);
+  else if (!v && map.hasLayer(layer)) map.removeLayer(layer);
+}
 function renderExits() {
-  if (map.getZoom() < EXIT_ZOOM) { exitLayer.clearLayers(); return; }
+  if (map.getZoom() < EXIT_ZOOM || (!exitKinds.sortides && !exitKinds.ports)) { exitLayer.clearLayers(); return; }
   loadExits().then(() => {
     exitLayer.clearLayers();
     if (map.getZoom() < EXIT_ZOOM) return;
     const b = map.getBounds().pad(0.1);
-    for (const x of exitsIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).slice(0, 400)) {
-      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'exit-dot', html: EXIT_ICO, iconSize: [16, 16], iconAnchor: [8, 8] }), keyboard: false, zIndexOffset: -1500 })
-        .bindTooltip(`Sortida: ${esc(exitName(x))}${x.type === 'platja' ? '' : ''}`, { direction: 'top', offset: [0, -8] })
+    const list = exitsIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).filter((x) => (x.type === 'port' ? exitKinds.ports : exitKinds.sortides));
+    for (const x of list.slice(0, 400)) {
+      const port = x.type === 'port';
+      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: `exit-dot${port ? ' port' : ''}`, html: port ? PORT_ICO : EXIT_ICO, iconSize: [16, 16], iconAnchor: [8, 8] }), keyboard: false, zIndexOffset: -1500 })
+        .bindTooltip(port ? `Port: ${esc(x.name ?? 'port')} · es pot sortir de l'aigua` : `Sortida: ${esc(exitName(x))}`, { direction: 'top', offset: [0, -8] })
         .addTo(exitLayer);
     }
   }).catch(() => {});
@@ -375,6 +388,7 @@ function renderLayer() {
 // ---------- Fitxa "La teva nedada" ----------
 export function openSheet() {
   ctx.closeDetail();
+  ctx.routeUsed?.();
   $('routeSheet').hidden = false;
   // Si la ruta no es veu sencera (o es veu massa petita), hi acostem el mapa.
   const r = getRoute();
