@@ -64,7 +64,8 @@ const MARINE = ['wave_height', 'wave_direction', 'wave_period', 'wind_wave_heigh
   // Període de pic (el que més s'assembla al que mesura una boia) i segon mar de fons (per detectar mar creuada).
   'wind_wave_period', 'wind_wave_peak_period', 'swell_wave_peak_period',
   'secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period'];
-const WIND = ['wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'weather_code', 'temperature_2m'];
+// Pressió, CAPE (energia per a tempestes) i pluja: per als avisos de temps (weatherAlerts).
+const WIND = ['wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'weather_code', 'temperature_2m', 'pressure_msl', 'cape', 'precipitation'];
 
 /**
  * Altres models d'onades, per contrastar-los amb el principal (best_match, ~Météo-France).
@@ -75,7 +76,7 @@ export const WAVE_MODELS = [
   { id: 'gfs', api: 'ncep_gfswave025', name: 'GFS Wave', note: 'EUA · també al Windy' },
   { id: 'dwd', api: 'dwd_ewam', name: 'DWD EWAM', note: 'Alemanya · més fi' },
 ];
-const DATA_VERSION = 4; // apujar-ho si canvia el format de les dades desades
+const DATA_VERSION = 5; // apujar-ho si canvia el format de les dades desades
 
 // ---------- Descàrrega ----------
 export function cachedMarine() {
@@ -154,6 +155,7 @@ function toHours(M, W, X, C = null) {
       sst: M.sea_surface_temperature[k],
       wind: W.wind_speed_10m[k], windDir: W.wind_direction_10m[k], gust: W.wind_gusts_10m[k],
       code: W.weather_code[k], air: W.temperature_2m[k],
+      p: W.pressure_msl?.[k] ?? null, cape: W.cape?.[k] ?? null, pr: W.precipitation?.[k] ?? null,
       mod: X ? Object.fromEntries(WAVE_MODELS.map((o) => [o.id, [X[`wave_height_${o.api}`]?.[k] ?? null, X[`wave_direction_${o.api}`]?.[k] ?? null]])) : null,
       ...(C ? { cur: C.ocean_current_velocity?.[k] == null ? null : [C.ocean_current_velocity[k], C.ocean_current_direction[k]] } : {}),
   }));
@@ -438,4 +440,57 @@ export function sstStats(data, k) {
   if (!v.length) return null;
   const min = v.reduce((a, x) => (x.t < a.t ? x : a)), max = v.reduce((a, x) => (x.t > a.t ? x : a));
   return { avg: v.reduce((a, x) => a + x.t, 0) / v.length, min, max };
+}
+
+// ---------- Avisos de temps ----------
+// Els fronts i les tempestes es poden avançar o endarrerir fins a 2 hores respecte de la previsió:
+// es miren de 2 h abans de ficar-se a l'aigua fins a 2 h després de sortir-ne.
+export const ALERT_MARGIN = 2 * 3600;
+export const ALERT_LIMITS = { pDrop: 3, cape: 700, windUp: 25, gust: 50, rain: 4 };
+
+/**
+ * Avisos per a una nedada de `from` a `to` (s): tempesta, baixada ràpida de pressió (entrada d'un front),
+ * entrada o gir fort de vent, ratxes molt fortes i pluja forta. Cada avís: { kind, level ('perill' | 'atencio'), t, text }.
+ */
+export function weatherAlerts(hours, from, to = from) {
+  if (!hours?.length) return [];
+  const lo = from - ALERT_MARGIN, hi = to + ALERT_MARGIN;
+  const H = hours.filter((h) => h.t >= lo && h.t <= hi);
+  if (!H.length) return [];
+  const L = ALERT_LIMITS;
+  const at = (t) => `les ${new Intl.DateTimeFormat('ca', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(t * 1000)} h`;
+  const out = [];
+  const storm = H.find((h) => h.code >= 95);
+  if (storm) out.push({ kind: 'tempesta', level: 'perill', t: storm.t, text: `Tempesta prevista cap a ${at(storm.t)}. Amb llamps, fora de l'aigua.` });
+  else {
+    const unstable = H.find((h) => h.cape >= L.cape && ((h.pr ?? 0) >= 0.2 || h.code >= 80));
+    if (unstable) out.push({ kind: 'tempesta', level: 'atencio', t: unstable.t, text: `Atmosfera inestable cap a ${at(unstable.t)}: hi pot haver xàfecs amb tempesta.` });
+  }
+  // Baixada de pressió en 3 hores (es mira també una mica abans, perquè el front ja pot estar entrant).
+  const P = hours.filter((h) => h.t >= lo - 3 * 3600 && h.t <= hi && h.p != null);
+  let drop = null;
+  for (const a of P) {
+    const b = P.find((x) => x.t === a.t + 3 * 3600);
+    if (b && a.p - b.p >= L.pDrop && (!drop || a.p - b.p > drop.d)) drop = { d: a.p - b.p, t: b.t };
+  }
+  if (drop) out.push({ kind: 'pressio', level: drop.d >= 5 ? 'perill' : 'atencio', t: drop.t,
+    text: `La pressió baixa ${Math.round(drop.d)} hPa en 3 hores (fins a ${at(drop.t)}): entrada d'un front o de mal temps, el mar pot canviar ràpid.` });
+  // Entrada de vent: el que bufa en ficar-se a l'aigua contra el màxim que arriba després.
+  const h0 = H.find((h) => h.t >= from) ?? H[0];
+  const later = H.filter((h) => h.t > h0.t && h.wind != null);
+  const top = later.reduce((m, h) => (!m || h.wind > m.wind ? h : m), null);
+  if (h0.wind != null && top && top.wind >= L.windUp && top.wind >= h0.wind + 12) {
+    out.push({ kind: 'vent', level: top.wind >= 38 ? 'perill' : 'atencio', t: top.t,
+      text: `El vent puja de ${Math.round(h0.wind)} a ${Math.round(top.wind)} km/h del ${windName(top.windDir)} cap a ${at(top.t)}.` });
+  } else {
+    const turn = later.find((h) => h.wind >= 18 && h0.windDir != null && angDiff(h.windDir, h0.windDir) >= 90);
+    if (turn) out.push({ kind: 'vent', level: 'atencio', t: turn.t,
+      text: `Gir de vent cap a ${at(turn.t)}: de ${windName(h0.windDir)} a ${windName(turn.windDir)}, ${Math.round(turn.wind)} km/h. El mar es pot girar o picar.` });
+  }
+  // Ratxes: només si arriben després (si ja bufen en ficar-se a l'aigua, el semàfor ja ho diu).
+  const gust = (h0.gust ?? 0) < L.gust - 15 ? later.find((h) => h.gust >= L.gust) : null;
+  if (gust) out.push({ kind: 'ratxes', level: 'perill', t: gust.t, text: `Ratxes de ${Math.round(gust.gust)} km/h cap a ${at(gust.t)}.` });
+  const rain = H.find((h) => h.pr >= L.rain);
+  if (rain && !storm) out.push({ kind: 'pluja', level: 'atencio', t: rain.t, text: `Pluja forta cap a ${at(rain.t)} (${Math.round(rain.pr)} mm en una hora): poca visibilitat a l'aigua.` });
+  return out;
 }

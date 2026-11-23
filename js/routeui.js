@@ -1,6 +1,7 @@
 // Pantalla de les rutes de nedada: dibuixar-la (com al MapTrack: creu al centre, "+ Punt", "Desfer"),
 // pintar-la al mapa per trams amb el color del semàfor i la fitxa "La teva nedada".
 import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS } from './marine.js';
+import { loadExits, exitsIn, exitName, EXIT_TYPES } from './exits.js';
 import { routeGeometry, fetchRouteData, cachedRouteData, runRoute, recommend, getRoute, saveRoute, deleteRoute,
   pathLength, isLoop, distM, bearing, DEFAULT_PACE, placeName, headingName } from './route.js';
 
@@ -24,6 +25,7 @@ const ICO = {
 
 let map = null, ctx = null;
 let layer = null;          // ruta analitzada al mapa
+let exitLayer = null;      // sortides d'emergència (a partir de zoom 13)
 let drawing = null;        // { pts: [LatLng], layer, line, verts }
 let cross = null, bar = null;
 let geo = null, data = null, result = null, rec = null, err = null, busy = false;
@@ -62,10 +64,16 @@ export function initRoutes(m, c) {
   // En editar una ruta, la creu no compta com a punt nou fins que l'usuari arrossega el mapa.
   map.on('dragstart', () => { if (drawing) drawing.follow = true; });
   layer = L.layerGroup().addTo(map);
+  exitLayer = L.layerGroup().addTo(map);
+  map.on('moveend', renderExits);
+  renderExits();
   // Amb el mapa allunyat només es veu la línia de colors: les hores, fletxes i rètols es barrejarien amb les etiquetes.
   const far = () => map.getContainer().classList.toggle('route-far', map.getZoom() < 12);
   map.on('zoomend', far);
   far();
+  // La separació de la tornada depèn del zoom: es torna a dibuixar quan canvia.
+  let lastOff = null;
+  map.on('zoomend', () => { const o = Math.round(returnOffset(42)); if (o !== lastOff) { lastOff = o; if (getRoute() && !drawing) renderLayer(); } });
 
   $('rClose').onclick = closeSheet;
   $('routeSheet').addEventListener('click', (e) => { if (e.target === $('routeSheet')) closeSheet(); });
@@ -80,6 +88,26 @@ export function initRoutes(m, c) {
 }
 
 // ---------- Dibuixar ----------
+export const hasRoute = () => !!getRoute();
+/** Menú contextual del mapa: començar una ruta nova amb el primer punt on s'ha tocat. */
+export function startRouteAt(lat, lon) {
+  if (getRoute() && !confirm('Ja tens una ruta desada. Vols començar-ne una de nova? (La d’ara s’esborrarà quan toquis «Fet».)')) return;
+  startDraw();
+  map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: false });
+  addPointAt(L.latLng(lat, lon));
+}
+/** Dibuixant, el clic dret o mantenir premut posa el punt allà mateix (sense haver de moure la creu). */
+export function addPointAt(ll) {
+  if (!drawing) return;
+  const last = drawing.pts.at(-1);
+  if (last && distM([last.lat, last.lng], [ll.lat, ll.lng]) < 15) return;
+  drawing.pts.push(ll);
+  drawing.follow = true;
+  navigator.vibrate?.(15);
+  drawVerts();
+  map.panTo(ll);
+  drawLive();
+}
 function startDraw(pts = []) {
   closeSheet();
   ctx.closeDetail();
@@ -217,12 +245,67 @@ function recompute() {
 }
 export const refreshRoute = () => { if (map && getRoute() && !drawing && !busy) analyse(); };
 
+// ---------- Avisos de temps (també els fa servir app.js) ----------
+export const RADAR_LINKS = '<span class="wx-radar">Radar: <a href="https://www.meteo.cat/observacions/radar" target="_blank" rel="noopener">Meteocat</a> · <a href="https://www.aemet.es/ca/eltiempo/observacion/radar" target="_blank" rel="noopener">AEMET</a></span>';
+export function alertsHtml(list, note = true) {
+  if (!list.length) return '';
+  return `<div class="wx-box ${list.some((a) => a.level === 'perill') ? 'perill' : ''}">
+    <ul>${list.map((a) => `<li class="${a.level}"><b>${a.level === 'perill' ? 'Perill' : 'Atenció'}:</b> ${a.text}${a.where ? ` <small>${a.where}</small>` : ''}</li>`).join('')}</ul>
+    ${note ? `<p>Els fronts i les tempestes es poden avançar o endarrerir fins a 2 hores. ${RADAR_LINKS}</p>` : ''}
+  </div>`;
+}
+
+// ---------- Sortides al mapa ----------
+const EXIT_ZOOM = 13;
+const EXIT_ICO = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="4" fill="#1f9d55" stroke="#fff" stroke-width="1.6"/><path d="M8 11.5V5M5.2 7.6 8 4.8l2.8 2.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function renderExits() {
+  if (map.getZoom() < EXIT_ZOOM) { exitLayer.clearLayers(); return; }
+  loadExits().then(() => {
+    exitLayer.clearLayers();
+    if (map.getZoom() < EXIT_ZOOM) return;
+    const b = map.getBounds().pad(0.1);
+    for (const x of exitsIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).slice(0, 400)) {
+      L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'exit-dot', html: EXIT_ICO, iconSize: [16, 16], iconAnchor: [8, 8] }), keyboard: false, zIndexOffset: -1500 })
+        .bindTooltip(`Sortida: ${esc(exitName(x))}${x.type === 'platja' ? '' : ''}`, { direction: 'top', offset: [0, -8] })
+        .addTo(exitLayer);
+    }
+  }).catch(() => {});
+}
+
 // ---------- Ruta al mapa ----------
 /** Un punt desplaçat `mt` metres mar endins (la tornada es dibuixa una mica separada de l'anada). */
-function seaward(s, mt) {
-  if (s.facing == null) return [s.lat, s.lon];
-  const f = (s.facing * Math.PI) / 180;
-  return [s.lat + (mt * Math.cos(f)) / 111320, s.lon + (mt * Math.sin(f)) / (111320 * Math.cos((s.lat * Math.PI) / 180))];
+const RETURN_OFFSET = 50; // m: la tornada es dibuixa paral·lela a l'anada, separada cap al mar, perquè es vegin les dues
+const RETURN_PX = 14; // px: separació mínima a la pantalla (amb el mapa allunyat, 50 m no basten perquè no es toquin)
+const metresPerPx = (lat) => (40075016.7 * Math.cos((lat * Math.PI) / 180)) / 2 ** (Math.max(map.getZoom(), 12) + 8);
+/** Separació de la tornada (m) al zoom actual: 50 m de prop, més amb el mapa allunyat (es recalcula en fer zoom). */
+const returnOffset = (lat) => Math.max(RETURN_OFFSET, RETURN_PX * metresPerPx(lat));
+const angGap = (a, b) => { const d = Math.abs((((a - b) % 360) + 360) % 360); return d > 180 ? 360 - d : d; };
+const shift = (lat, lon, deg, mt) => {
+  const f = (deg * Math.PI) / 180;
+  return [lat + (mt * Math.cos(f)) / 111320, lon + (mt * Math.sin(f)) / (111320 * Math.cos((lat * Math.PI) / 180))];
+};
+/**
+ * Posició de cada mostra al mapa: l'anada on és; la tornada desplaçada perpendicularment al sentit de nedada, cap al
+ * costat on s'obre el mar. El costat només canvia si l'altre és clarament més mar (així la línia no fa ziga-zagues).
+ */
+function drawPositions(S) {
+  const pos = new Map();
+  const sea = new Map(); // cap on queda el mar, perpendicular al sentit de nedada (per als números dels trams)
+  const off = returnOffset(S[0]?.lat ?? 42);
+  let side = null, leg = null;
+  for (const s of S) {
+    if (s.leg !== leg) { leg = s.leg; side = null; }
+    const r = (s.heading + 90) % 360, l = (s.heading + 270) % 360;
+    if (s.facing != null) {
+      const dr = angGap(r, s.facing), dl = angGap(l, s.facing);
+      if (side == null || (side === 'r' && dl < dr - 30) || (side === 'l' && dr < dl - 30)) side = dr <= dl ? 'r' : 'l';
+    }
+    const dir = (side ?? (s.leg === 'tornada' ? 'r' : 'l')) === 'r' ? r : l;
+    sea.set(s, dir);
+    pos.set(s, s.leg === 'tornada' ? shift(s.lat, s.lon, dir, off) : [s.lat, s.lon]);
+  }
+  pos.sea = sea;
+  return pos;
 }
 
 function renderLayer() {
@@ -234,7 +317,8 @@ function renderLayer() {
     return;
   }
   const S = result.samples;
-  const at = (s) => (s.leg === 'tornada' ? seaward(s, 30) : [s.lat, s.lon]);
+  const P = drawPositions(S);
+  const at = (s) => P.get(s);
   for (const leg of ['anada', 'tornada']) {
     const L1 = S.filter((s) => s.leg === leg);
     if (!L1.length) continue;
@@ -259,9 +343,27 @@ function renderLayer() {
       L.marker(at(s), { icon: L.divIcon({ className: 'r-tick', html: `<span>${hhmm(s.t)}</span>`, iconSize: [0, 0], iconAnchor: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
     }
   }
+  // Número de cada tram, a la vora de la línia: l'anada cap a terra i la tornada cap a mar (així no es trepitgen).
+  const lab = 15 * metresPerPx(S[0].lat);
+  for (const g of result.trams) {
+    const m = g.mid, dir = P.sea.get(m);
+    const [la, lo] = at(m);
+    const ll = dir == null ? [la, lo] : shift(la, lo, g.leg === 'tornada' ? dir : (dir + 180) % 360, lab);
+    L.marker(ll, { icon: L.divIcon({ className: 'r-num', html: `<span class="${g.leg}" style="border-color:${LEVELS[g.worst.a.level].color}">${g.n}</span>`, iconSize: [0, 0] }),
+      keyboard: false, zIndexOffset: 800, title: `Tram ${g.n}: ${placeName(m)}` })
+      .on('click', () => showTram(g.n)).addTo(layer);
+  }
   const first = S[0], turn = result.back ? S.find((s, i) => S[i + 1]?.leg === 'tornada') : S.at(-1);
   L.marker(at(first), { icon: L.divIcon({ className: 'r-pin start', html: `<i></i><span>Sortida ${hhmm(first.t)}</span>`, iconSize: [0, 0] }), keyboard: false, zIndexOffset: 900 }).on('click', openSheet).addTo(layer);
   if (turn) L.marker(at(turn), { icon: L.divIcon({ className: 'r-pin end', html: `<i></i><span>${result.back ? 'Gir' : 'Arribada'} ${hhmm(turn.t)}</span>`, iconSize: [0, 0] }), keyboard: false, zIndexOffset: 900 }).on('click', openSheet).addTo(layer);
+  const g = result.gap;
+  if (g && g.len >= 600 && geo) {
+    const mid = (g.from + g.to) / 2;
+    const p = geo.pos.reduce((a, q) => (Math.abs(q.d - mid) < Math.abs(a.d - mid) ? q : a), geo.pos[0]);
+    L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'r-gap', iconSize: [0, 0],
+      html: `<span>${fmtDist(g.len)} sense sortida${g.deadEnd ? ' (fins al gir)' : ''}</span>` }), keyboard: false, zIndexOffset: 950, title: 'Tram més llarg sense sortida' })
+      .on('click', openSheet).addTo(layer);
+  }
   const w = result.worst;
   if (w.a.level > 0 || w.a.score < 8.5) {
     L.marker(at(w), { icon: L.divIcon({ className: 'r-worst', iconSize: [0, 0],
@@ -283,6 +385,14 @@ export function openSheet() {
   renderSheet();
 }
 export function closeSheet() { $('routeSheet').hidden = true; }
+/** Obre la fitxa i porta la vista al tram número n de la llista (en clicar-ne el número al mapa). */
+function showTram(n) {
+  if ($('routeSheet').hidden) { ctx.closeDetail(); $('routeSheet').hidden = false; renderSheet(); }
+  const li = $('rBody').querySelector(`[data-tram="${n - 1}"]`);
+  if (!li) return;
+  li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  li.classList.remove('flash'); void li.offsetWidth; li.classList.add('flash');
+}
 
 function settingsHtml(r) {
   const now = Date.now() / 1000;
@@ -317,6 +427,7 @@ function recHtml(r) {
   if (b.worst.a.score > c.worst.a.score + 0.2) why.push(`el pitjor tram passa de ${m1(c.worst.a.score)} a ${m1(b.worst.a.score)}`);
   if (b.ret && c.ret && b.ret.wind - c.ret.wind >= 4) why.push('a la tornada el vent molesta menys');
   if (b.duration < c.duration - 240) why.push(`${fmtDur(c.duration - b.duration)} menys`);
+  if (c.alerts.some((a) => a.level === 'perill') && !b.alerts.some((a) => a.level === 'perill')) why.push("sense l'avís de temps");
   return `<div class="r-rec">Millor sortir <b>a les ${hhmm(rec.start)}${dir}</b>${why.length ? `: ${why.join(', ')}` : ''}.
     <button data-apply>Aplica-ho</button></div>`;
 }
@@ -325,7 +436,8 @@ function summaryHtml(R) {
   const w = R.worst, k = w.a.sea?.kind;
   const p = [];
   p.push(`Sortint a les ${hhmm(R.start)} ${headingName(R.samples[0].heading)}, ${R.back ? 'tornareu' : 'arribareu'} cap a les <b>${hhmm(R.end)}</b>.`);
-  p.push(`El tram més mogut és <b>${esc(placeName(w))}</b> (${hhmm(w.t)}): ${m1(w.a.beachHs)} m${k && k !== 'plana' ? `, ${SEA_KINDS[k].label.toLowerCase()}` : ''}, ${w.sector || 'mar obert'}${w.h.wind != null ? `, vent de ${Math.round(w.h.wind)} km/h del ${windName(w.h.windDir)}` : ''}.`);
+  const wn = R.trams.find((g) => g.from.d <= w.d && w.d <= g.to.d && g.leg === w.leg)?.n;
+  p.push(`El tram més mogut és <b>${wn ? `el ${wn}, ` : ''}${esc(placeName(w))}</b> (${hhmm(w.t)}): ${m1(w.a.beachHs)} m${k && k !== 'plana' ? `, ${SEA_KINDS[k].label.toLowerCase()}` : ''}, ${w.sector || 'mar obert'}${w.h.wind != null ? `, vent de ${Math.round(w.h.wind)} km/h del ${windName(w.h.windDir)}` : ''}.`);
   if (R.ret) {
     const o = R.out, t = R.ret;
     const harder = t.cur < o.cur - 0.1 || t.wind < o.wind - 6;
@@ -338,12 +450,27 @@ function summaryHtml(R) {
   if (Math.abs(diff) >= 240) p.push(`El corrent i el vent ${diff > 0 ? 'us fan perdre' : 'us fan guanyar'} uns ${fmtDur(Math.abs(diff))}.`);
   const off = R.samples.find((s) => s.a.rel === 'terra' && (s.h.wind ?? 0) >= 20);
   if (off) p.push(`<span class="r-warn-t">Vent de terra de ${Math.round(off.h.wind)} km/h a ${esc(placeName(off))}: us allunya de la costa.</span>`);
+  p.push(exitsSentence(R));
   return `<p class="r-sum">${p.join(' ')}</p>`;
+}
+
+/** Frase de les sortides: quantes n'hi ha i el tram més llarg sense cap. */
+function exitsSentence(R) {
+  const n = R.exits?.length ?? 0, g = R.gap;
+  if (!g) return '';
+  if (!n) return `<span class="r-warn-t">No hi ha cap platja ni escala per sortir a prop del recorregut${R.back ? '' : ' fins a l’arribada'}: ${fmtDist(g.len)} sense sortida.</span>`;
+  const name = (along) => {
+    const e = R.exits.find((x) => x.along === along);
+    return e ? esc(exitName(e)) : along === 0 ? 'el punt de sortida' : 'l’arribada';
+  };
+  const where = g.deadEnd ? `de ${name(g.from)} fins al gir` : `entre ${name(g.from)} i ${name(g.to)}`;
+  const txt = `Sortides a prop del recorregut: ${n}. El tram més llarg sense cap és de <b>${fmtDist(g.len)}</b>, ${where}${g.deadEnd ? ' (i tornar)' : ''}.`;
+  return g.len >= 1500 ? `<span class="r-warn-t">${txt}</span>` : txt;
 }
 
 /** Perfil al llarg de la ruta: nota de cada tram (barres), onada a la platja (línia) i esforç (franja de sota). */
 function chartHtml(R) {
-  const S = R.samples, W = 600, H = 150, top = 14, hBar = 78, yE = top + hBar + 8;
+  const S = R.samples, W = 600, H = 158, top = 14, hBar = 78, yE = top + hBar + 8, yX = yE + 10;
   const x = (d) => (d / R.length) * W;
   const bw = Math.max(2, W / S.length);
   const maxHs = Math.max(0.5, ...S.map((s) => s.a.beachHs ?? 0));
@@ -358,16 +485,26 @@ function chartHtml(R) {
   });
   const line = S.map((s, i) => `${i ? 'L' : 'M'}${x(s.d).toFixed(1)} ${(top + hBar - ((s.a.beachHs ?? 0) / maxHs) * hBar).toFixed(1)}`).join(' ');
   out += `<path d="${line}" fill="none" stroke="#0b1d2c" stroke-width="4" stroke-linejoin="round" opacity=".55"/><path d="${line}" fill="none" stroke="#a8dcff" stroke-width="2" stroke-linejoin="round"/>`;
+  // Sortides (marques verdes) i el tram més llarg sense sortida (franja taronja), passats a la distància nedada.
+  const Ld = R.drawLen;
+  const seqD = (along) => (R.back ? [along, 2 * Ld - along] : [R.reverse ? Ld - along : along]);
+  if (R.gap?.len >= 600) {
+    const a = seqD(R.gap.from), b = seqD(R.gap.to);
+    const spans = R.back ? (R.gap.deadEnd ? [[a[0], a[1]]] : [[a[0], b[0]], [b[1], a[1]]]) : [[Math.min(a[0], b[0]), Math.max(a[0], b[0])]];
+    for (const [p, q] of spans) out += `<rect x="${x(p).toFixed(1)}" y="${yX}" width="${(x(q) - x(p)).toFixed(1)}" height="7" rx="2" fill="rgba(255,159,67,.55)"/>`;
+  }
+  for (const e of R.exits ?? []) for (const d of seqD(e.along)) out += `<rect x="${(x(d) - 1.5).toFixed(1)}" y="${yX - 1}" width="3" height="9" rx="1" fill="#3ccf7a"/>`;
   let next = R.start;
   for (const s of S) {
     if (s.t < next) continue;
     while (next <= s.t) next += 20 * 60;
-    out += `<line x1="${x(s.d)}" y1="${yE + 8}" x2="${x(s.d)}" y2="${yE + 13}" stroke="rgba(255,255,255,.5)"/><text x="${Math.min(W - 16, Math.max(14, x(s.d)))}" y="${yE + 25}" font-size="10.5" fill="rgba(255,255,255,.75)" text-anchor="middle">${hhmm(s.t)}</text>`;
+    out += `<line x1="${x(s.d)}" y1="${yX + 10}" x2="${x(s.d)}" y2="${yX + 15}" stroke="rgba(255,255,255,.5)"/><text x="${Math.min(W - 16, Math.max(14, x(s.d)))}" y="${yX + 27}" font-size="10.5" fill="rgba(255,255,255,.75)" text-anchor="middle">${hhmm(s.t)}</text>`;
   }
-  out += `<text x="${W}" y="${yE + 38}" font-size="10" fill="rgba(255,255,255,.5)" text-anchor="end">${fmtDist(R.length)}</text>`;
+  out += `<text x="${W}" y="${yX + 40}" font-size="10" fill="rgba(255,255,255,.5)" text-anchor="end">${fmtDist(R.length)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Nota i onada al llarg de la ruta">${out}</svg>
     <div class="legend r-legend"><span><i style="background:#3ccf7a"></i>Barres: nota de cada tram</span><span><i style="background:#a8dcff"></i>Línia: onada (fins a ${m1(maxHs)} m)</span>
-    <span>Franja de sota: <b style="color:#9be7b4">a favor</b> / <b style="color:#ff8f8f">en contra</b></span></div>`;
+    <span>Franja de sota: <b style="color:#9be7b4">a favor</b> / <b style="color:#ff8f8f">en contra</b></span>
+    <span><i style="background:#3ccf7a;border-radius:2px;width:4px"></i>Sortides · <b style="color:#ffb26b">taronja</b>: tram més llarg sense sortida</span></div>`;
 }
 
 function tramsHtml(R) {
@@ -377,10 +514,15 @@ function tramsHtml(R) {
     const wind = h.wind == null ? '' : `vent ${Math.round(h.wind)} km/h ${WREL[w.windRel] ?? ''}`;
     const cur = Math.abs(g.cur) >= 0.05 ? ` · corrent ${signed1(g.cur)} km/h` : '';
     const flags = [g.cape ? 'punta exposada' : '', g.land ? 'passa per terra?' : ''].filter(Boolean).join(' · ');
+    const mid = g.mid;
+    // El nom només si la sortida més propera és aquesta (i no el punt d'on heu sortit o l'arribada).
+    const named = mid.exit && Math.abs(mid.exitDist - Math.abs(mid.exit.along - (geo?.pos[mid.pos]?.d ?? 0))) < 5 ? `: ${esc(exitName(mid.exit))}` : '';
+    const exit = mid.exitDist == null || !isFinite(mid.exitDist) ? '' : mid.exitDist < 120 ? `sortida aquí${named}` : `sortida a ${fmtDist(mid.exitDist)}${named}`;
     return `<li data-tram="${i}">
+      <span class="r-n ${g.leg}" title="Tram ${g.n}">${g.n}</span>
       <span class="r-t">${hhmm(g.from.t)}${g.leg === 'tornada' ? '<small>tornada</small>' : ''}</span>
       <b class="r-sc" style="background:${LEVELS[w.a.level].color}">${m1(w.a.score)}</b>
-      <span class="r-what"><b>${esc(placeName(g.mid))}</b><small>${sea} · ${w.sector || 'mar obert'}</small><small>${wind}${cur}${flags ? ` · <em>${flags}</em>` : ''}</small></span>
+      <span class="r-what"><b>${esc(placeName(g.mid))}</b><small>${sea} · ${w.sector || 'mar obert'}</small><small>${wind}${cur}${flags ? ` · <em>${flags}</em>` : ''}</small>${exit ? `<small class="${mid.exitDist > 1000 ? 'r-far' : 'r-exit'}">${exit}</small>` : ''}</span>
       <span class="ef ${g.effort}">${EFF[g.effort]}</span>
     </li>`;
   }).join('')}</ul>`;
@@ -395,6 +537,7 @@ function renderSheet() {
   const R = result;
   const warns = [];
   if (err) warns.push(`No s'han pogut carregar les dades de la ruta: ${esc(err)}`);
+  if (geo?.noExits) warns.push("No s'han pogut carregar les sortides d'emergència.");
   if (geo?.noCoast) warns.push("No s'ha pogut carregar la línia de costa: la ruta es calcula com si tot fos mar obert.");
   if (geo?.outside && !geo?.noCoast) warns.push('Una part de la ruta queda fora de la Costa Brava: allà no es té en compte la forma de la costa.');
   if (geo?.onLand) warns.push('Algun punt de la ruta sembla que passa per terra. Revisa el dibuix (llapis de dalt).');
@@ -403,12 +546,13 @@ function renderSheet() {
   if (!R) body += `<p class="d-note">${busy ? 'Calculant la ruta: costa, onades, vent i corrents…' : ''}</p>`;
   else {
     const wl = LEVELS[R.worst.a.level];
-    body += recHtml(r) + `
+    body += recHtml(r) + alertsHtml(R.alerts) + `
       <div class="r-kpis">
         <div><b>${fmtDur(R.duration)}</b><span>durada</span></div>
         <div><b>${hhmm(R.end)}</b><span>${R.back || loop ? 'tornada' : 'arribada'}</span></div>
         <div><b><i style="background:${wl.color}"></i>${m1(R.worst.a.score)}</b><span>pitjor tram</span></div>
         <div><b>${m1(R.mean)}</b><span>nota mitjana</span></div>
+        <div class="${R.gap?.len >= 1500 ? 'warn' : ''}"><b>${R.gap ? fmtDist(R.gap.len) : '—'}</b><span>sense sortida</span></div>
       </div>
       ${summaryHtml(R)}
       <div class="d-h">Al llarg de la ruta</div>

@@ -283,8 +283,20 @@ a.icon-btn { color: inherit; text-decoration: none; }
 .route-ctl a { display: grid; place-items: center; color: #0b1d2c; }
 .route-ctl a:hover { color: #d93025; }
 body.routing .route-ctl a { color: #d93025; }
-/* Dibuixant: fora etiquetes i boies, creu al centre del mapa i barra de botons a baix. */
-body.routing .bm-wrap, body.routing .buoy-dot { display: none; }
+/* Dibuixant (o amb el botó de l'ull): fora etiquetes i boies, creu al centre del mapa i barra de botons a baix. */
+body.routing .bm-wrap, body.routing .buoy-dot,
+body.marks-off .bm-wrap, body.marks-off .buoy-dot { display: none; }
+.marks-ctl a { display: grid; place-items: center; color: #0b1d2c; }
+.marks-ctl a:hover { color: #1a73e8; }
+.marks-ctl a.on { color: #1a73e8; background: #e8f0fe; }
+/* Menú del clic dret / mantenir premut */
+.ctx-pop .leaflet-popup-content-wrapper { padding: 4px; border-radius: 10px; }
+.ctx-pop .leaflet-popup-content { margin: 0; }
+.ctx-menu { display: flex; flex-direction: column; min-width: 190px; }
+.ctx-menu button { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 14px; color: #0b1d2c; text-align: left; cursor: pointer; }
+.ctx-menu button:hover, .ctx-menu button:focus-visible { background: #eef3f8; }
+.ctx-menu button svg { flex: none; color: #1a73e8; }
+.ctx-menu button + button { border-top: 1px solid #edf0f3; border-radius: 0 0 7px 7px; }
 .r-cross, .r-bar { display: none; }
 body.routing .r-cross { display: block; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; z-index: 650; pointer-events: none; }
 .r-cross::before, .r-cross::after { content: ''; position: absolute; background: #d93025; box-shadow: 0 0 0 1.5px #fff; border-radius: 1px; }
@@ -316,7 +328,12 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .r-worst span { position: absolute; left: 10px; top: 8px; display: flex; align-items: center; gap: 6px; font: 600 12px/1 system-ui, sans-serif; color: #0b1d2c;
   background: #fff; padding: 3px 8px 3px 3px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); white-space: nowrap; cursor: pointer; }
 .r-worst b { min-width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #0b1d2c; font-size: 11.5px; }
-.route-far .r-tick, .route-far .r-arrow, .route-far .r-worst, .route-far .r-pin span { display: none; }
+/* Número de tram: quadradet (els cercles són notes), vora amb el color del semàfor del tram */
+.r-num { background: none; border: 0; }
+.r-num span { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; box-sizing: border-box; display: grid; place-items: center; border-radius: 5px;
+  border: 2.5px solid #0b1d2c; background: #fff; color: #0b1d2c; font: 700 11px/1 system-ui, sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); cursor: pointer; }
+.r-num span.tornada { background: #0b1d2c; color: #fff; }
+.route-far .r-tick, .route-far .r-arrow, .route-far .r-worst, .route-far .r-pin span, .route-far .r-num { display: none; }
 /* Fitxa "La teva nedada" */
 .r-set { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .r-set label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -328,18 +345,24 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .r-rec { background: rgba(60, 207, 122, .16); border: 1px solid rgba(60, 207, 122, .35); border-radius: 12px; padding: 8px 10px; font-size: 14px; line-height: 1.45; margin: 8px 0; }
 .r-rec.same { background: rgba(255, 255, 255, .07); border-color: transparent; color: rgba(255, 255, 255, .75); font-size: 13px; }
 .r-rec button { margin-left: 6px; font-family: inherit; font-weight: 600; font-size: 13px; line-height: 1; padding: 6px 10px; border-radius: 10px; background: #3ccf7a; color: #0b1d2c; }
-.r-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 6px; }
+.r-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0 6px; }
 .r-kpis div { background: rgba(255, 255, 255, .08); border-radius: 12px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
 .r-kpis b { font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 5px; }
 .r-kpis b i { width: 10px; height: 10px; border-radius: 50%; }
 .r-kpis span { font-size: 11px; color: rgba(255, 255, 255, .6); }
+.r-kpis div.warn { background: rgba(255, 159, 67, .22); }
+.r-kpis div.warn b { color: #ffc58a; }
 .r-sum { font-size: 14px; line-height: 1.5; margin: 8px 0; }
 .r-warn-t { color: #ffe08a; }
 .r-chart svg { display: block; }
 .r-legend { padding: 6px 0 0; color: rgba(255, 255, 255, .7); }
 .r-trams { list-style: none; margin: 0; padding: 0; }
-.r-trams li { display: grid; grid-template-columns: 44px 30px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, .08); cursor: pointer; border-radius: 8px; }
+.r-trams li { display: grid; grid-template-columns: 22px 44px 30px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, .08); cursor: pointer; border-radius: 8px; }
 .r-trams li:hover { background: rgba(255, 255, 255, .06); }
+.r-trams li.flash { animation: r-flash 1.6s ease-out; }
+@keyframes r-flash { 0%, 30% { background: rgba(255, 255, 255, .22); } 100% { background: transparent; } }
+.r-n { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: #fff; color: #0b1d2c; }
+.r-n.tornada { background: transparent; color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .7); }
 .r-t { font-size: 13px; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
 .r-t small { font-size: 10px; color: rgba(255, 255, 255, .55); }
 .r-sc { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #0b1d2c; font-size: 12px; }
@@ -351,6 +374,62 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .ef.favor { background: rgba(60, 207, 122, .2); color: #9be7b4; }
 .ef.contra { background: rgba(239, 91, 91, .2); color: #ff9f9f; }
 @media (max-width: 380px) {
-  .r-kpis { grid-template-columns: repeat(2, 1fr); }
+  .r-kpis { grid-template-columns: repeat(3, 1fr); }
   .r-bar button { padding: 9px 9px; font-size: 13px; }
 }
+
+/* Sortides d'emergència: quadradet verd amb una fletxa cap amunt, a sota de les etiquetes. */
+.exit-dot { background: none; border: 0; }
+.exit-dot svg { display: block; width: 16px; height: 16px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.r-gap { background: none; border: 0; }
+.r-gap span { position: absolute; left: 10px; top: -30px; font: 600 12px/1 system-ui, sans-serif; color: #5a2d00; background: #ffd2a6;
+  padding: 4px 8px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); white-space: nowrap; cursor: pointer; }
+.route-far .r-gap span { display: none; }
+.r-what small.r-exit { color: #9be7b4; }
+.r-what small.r-far { color: #ffc58a; }
+@media (max-width: 420px) { .r-kpis { grid-template-columns: repeat(3, 1fr); } .r-trams li { gap: 6px; grid-template-columns: 20px 40px 28px minmax(0, 1fr) auto; } }
+
+/* Avisos de temps (tempesta, front, entrada de vent…) */
+.wx-alerts { margin-top: 8px; }
+.wx-box { background: rgba(245, 197, 66, .16); border: 1px solid rgba(245, 197, 66, .45); border-radius: 12px; padding: 8px 10px; margin: 8px 0; font-size: 13.5px; line-height: 1.45; }
+.wx-box.perill { background: rgba(239, 91, 91, .18); border-color: rgba(239, 91, 91, .6); }
+.wx-box ul { list-style: none; margin: 0; padding: 0; }
+.wx-box li + li { margin-top: 4px; }
+.wx-box li b { color: #ffd166; }
+.wx-box li.perill b { color: #ff8f8f; }
+.wx-box small { opacity: .75; }
+.wx-box p { margin: 6px 0 0; font-size: 12px; opacity: .8; }
+.wx-box a { color: inherit; text-decoration: underline; }
+.wx-radar { white-space: nowrap; }
+
+/* ---------- Capes d'onades i vent (a l'estil del Windy) ---------- */
+.fld-waves, .fld-wind { position: absolute; left: 0; top: 0; pointer-events: none; }
+.layers-ctl { position: relative; }
+.layers-ctl > a { display: grid; place-items: center; color: #0b1d2c; }
+.layers-ctl > a:hover { color: #1a73e8; }
+.layers-ctl > a.on { color: #1a73e8; background: #e8f0fe; }
+.layers-panel { position: absolute; left: 40px; top: 0; width: 230px; padding: 10px 12px; background: #fff; color: #0b1d2c; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .3); font-size: 13px; z-index: 1001; }
+.layers-panel b { display: block; font-size: 13px; margin-bottom: 6px; }
+.layers-panel label { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; }
+.layers-panel label small { display: block; font-size: 11px; color: #5b6b78; }
+.layers-panel input { position: absolute; opacity: 0; pointer-events: none; }
+.layers-panel .sw { flex: none; width: 34px; height: 20px; border-radius: 10px; background: #c9d2da; position: relative; transition: background .15s; }
+.layers-panel .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
+.layers-panel input:checked + .sw { background: #1a73e8; }
+.layers-panel input:checked + .sw::after { transform: translateX(14px); }
+.layers-panel input:focus-visible + .sw { outline: 2px solid #1a73e8; outline-offset: 2px; }
+.layers-panel p { margin: 6px 0 0; font-size: 11px; line-height: 1.35; color: #5b6b78; }
+.fld-legend { position: absolute; left: 8px; bottom: 22px; z-index: 800; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px;
+  background: rgba(255, 255, 255, .9); color: #0b1d2c; font: 600 10.5px/1.2 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
+.fld-legend div { display: grid; grid-template-columns: 40px 120px; align-items: center; column-gap: 6px; }
+.fld-legend i { display: block; height: 7px; border-radius: 4px; }
+.fld-legend small { grid-column: 2; display: flex; justify-content: space-between; font-weight: 500; font-size: 9.5px; color: #44535f; }
+.fld-legend small em { font-style: normal; }
+.fld-legend p { margin: 0; font-weight: 500; }
+.fld-legend p.err { color: #b3261e; max-width: 170px; }
+.fld-read { position: absolute; left: 8px; bottom: 22px; z-index: 800; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; border-radius: 8px;
+  background: rgba(11, 29, 44, .88); color: #fff; font: 500 12px/1.25 system-ui, sans-serif; pointer-events: none; }
+.fld-read span { display: flex; align-items: center; gap: 6px; }
+.fld-read i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+body.routing .fld-legend, body.routing .fld-read { display: none; }

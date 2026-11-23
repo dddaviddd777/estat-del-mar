@@ -1,8 +1,9 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts } from './marine.js';
 import * as store from './store.js';
+import { initLayers, setLayersTime } from './layers.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib, OTHER_BUOYS, fetchOthers, cachedOthers } from './buoy.js';
-import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute } from './routeui.js';
+import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute, alertsHtml, startRouteAt, addPointAt, hasRoute } from './routeui.js';
 
 const $ = (id) => document.getElementById(id);
 const nf1 = new Intl.NumberFormat('ca', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -101,9 +102,34 @@ function renderAll() {
 function renderTime() {
   const t = data.times[idx];
   $('timeLabel').textContent = `${dayLabel(t)} · ${hhmm(t)}`;
+  if (map) setLayersTime(t);
   renderChips();
   renderMarkers();
   renderList();
+  renderAlerts();
+}
+
+// ---------- Avisos de temps ----------
+// Una nedada dura unes 2 hores: es miren els avisos de l'hora triada fins a 2 h després (més el marge de weatherAlerts).
+const SWIM_LEN = 2 * 3600;
+/** Avisos de tota la costa a l'hora triada: si només afecten unes quantes platges, es diu on. */
+function renderAlerts() {
+  const t = data.times[idx];
+  const byKind = new Map();
+  for (const b of BEACHES) {
+    for (const a of weatherAlerts(data.beaches[b.id], t, t + SWIM_LEN)) {
+      const k = byKind.get(a.kind);
+      if (!k) byKind.set(a.kind, { ...a, beaches: [b.short ?? b.name] });
+      else {
+        k.beaches.push(b.short ?? b.name);
+        if (a.level === 'perill' && k.level !== 'perill') Object.assign(k, { level: a.level, text: a.text, t: a.t });
+      }
+    }
+  }
+  const list = [...byKind.values()].sort((a, b) => (a.level === 'perill' ? 0 : 1) - (b.level === 'perill' ? 0 : 1) || a.t - b.t);
+  list.forEach((a) => { if (a.beaches.length < BEACHES.length * 0.6) a.where = `(${a.beaches.slice(0, 3).join(', ')}${a.beaches.length > 3 ? '…' : ''})`; });
+  $('alerts').hidden = !list.length;
+  $('alerts').innerHTML = alertsHtml(list);
 }
 
 // Botons ràpids: ara, demà a les 9 h i demà passat a les 9 h (l'hora habitual de nedar).
@@ -131,7 +157,14 @@ function initMap() {
     if (!window.L) $('map').innerHTML = '<p style="padding:20px;color:#0b1d2c">El mapa necessita connexió.</p>';
     return;
   }
-  map = L.map('map', { zoomControl: false, scrollWheelZoom: false, zoomSnap: 0.25, zoomDelta: 0.5, tapHold: true }); // mig nivell per clic: les etiquetes canvien de mida a poc a poc
+  // Rodeta del ratolí: fa zoom a l'ordinador (pantalla ampla, on el mapa no té la pàgina a sota per desplaçar).
+  // En una sola columna la rodeta desplaça la pàgina, i amb Ctrl + rodeta es fa zoom.
+  map = L.map('map', { zoomControl: false, scrollWheelZoom: wide.matches, wheelPxPerZoomLevel: 90, zoomSnap: 0.25, zoomDelta: 0.5, tapHold: true }); // mig nivell per clic: les etiquetes canvien de mida a poc a poc
+  map.getContainer().addEventListener('wheel', (e) => {
+    if (wide.matches || !e.ctrlKey) return;
+    e.preventDefault();
+    map.setZoomAround(map.mouseEventToContainerPoint(e), map.getZoom() + (e.deltaY < 0 ? 0.5 : -0.5));
+  }, { passive: false });
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 17,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -139,6 +172,20 @@ function initMap() {
   L.control.zoom({ position: 'topleft' }).addTo(map);
   // Ruta de nedada (botó sota el zoom): dibuix, línia de colors i fitxa, a js/routeui.js.
   initRoutes(map, { closeDetail, wide, dayLabel, times: () => data?.times ?? [] });
+  // Botó per amagar (o tornar a ensenyar) les etiquetes de platges i punts i les boies: deixa només la ruta.
+  const Marks = L.Control.extend({
+    onAdd() {
+      const el = L.DomUtil.create('div', 'leaflet-bar marks-ctl');
+      el.innerHTML = '<a href="#" role="button"></a>';
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.on(el.firstChild, 'click', (e) => { L.DomEvent.preventDefault(e); setMarksHidden(!store.get('hideMarks', false)); });
+      return el;
+    },
+  });
+  new Marks({ position: 'topleft' }).addTo(map);
+  setMarksHidden(store.get('hideMarks', false));
+  // Capes d'onades i vent (a l'estil del Windy), amb el seu botó a sota de l'ull.
+  initLayers(map, { time: () => data.times[idx] });
   // Temperatura de l'aigua de tota la costa, a dalt a l'esquerra (és terra: no tapa cap etiqueta).
   const Sst = L.Control.extend({
     onAdd() {
@@ -154,7 +201,7 @@ function initMap() {
     wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [170, 24] });
   fitCoast();
   // En passar de mòbil a ordinador (o al revés) el mapa canvia molt de mida: el tornem a encaixar.
-  wide.addEventListener('change', () => setTimeout(() => { map.invalidateSize(); fitCoast(); }, 50));
+  wide.addEventListener('change', () => { map.scrollWheelZoom[wide.matches ? 'enable' : 'disable'](); setTimeout(() => { map.invalidateSize(); fitCoast(); }, 50); });
   // Si el mapa s'ha creat quan encara no tenia mida (pantalla amagada), l'ajustem quan en tingui.
   let hadSize = map.getSize().x > 100;
   new ResizeObserver(() => {
@@ -169,16 +216,51 @@ function initMap() {
   map.on('moveend resize', () => renderMarkers());
   renderBuoyDot();
   document.fonts?.ready.then(() => renderMarkers());
-  // Mantenir premut (mòbil, tapHold de Leaflet) o clic dret (ordinador): consulta aquell punt.
+  // Mantenir premut (mòbil, tapHold de Leaflet) o clic dret (ordinador): menú per consultar el punt o començar-hi una ruta.
   let lastPick = 0;
+  // Fora del dibuix surt un menú petit: consultar el mar d'aquell punt o començar-hi una ruta.
+  // Dibuixant una ruta, posa el punt de la ruta allà mateix.
   map.on('contextmenu', (e) => {
     e.originalEvent?.preventDefault?.();
-    if (isDrawing()) return; // dibuixant una ruta, el mapa només serveix per moure la creu
     if (Date.now() - lastPick < 800) return; // alguns mòbils l'envien dues vegades
     lastPick = Date.now();
-    pickPoint(e.latlng.lat, e.latlng.lng);
+    if (isDrawing()) return addPointAt(e.latlng);
+    openCtxMenu(e.latlng);
   });
   restorePts();
+}
+
+const EYE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+const EYE_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5l17 17M10.6 5.6A10 10 0 0 1 12 5.5c6.4 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.6 6.7C3.7 8.5 2 12 2 12s3.6 6.5 10 6.5a9.6 9.6 0 0 0 4.2-.9M9.9 9.9a2.8 2.8 0 0 0 4.2 4.2"/></svg>';
+/** Amaga o ensenya les etiquetes de platges i punts propis i les boies (es recorda per a la pròxima vegada). */
+function setMarksHidden(off) {
+  store.set('hideMarks', off);
+  document.body.classList.toggle('marks-off', off);
+  const a = document.querySelector('.marks-ctl a');
+  if (!a) return;
+  a.innerHTML = off ? EYE_OFF : EYE;
+  a.title = off ? 'Ensenya les platges i els punts' : 'Amaga les platges i els punts';
+  a.setAttribute('aria-label', a.title);
+  a.classList.toggle('on', off);
+}
+
+/** Menú del clic dret (o de mantenir premut al mòbil). */
+function openCtxMenu(ll) {
+  const el = document.createElement('div');
+  el.className = 'ctx-menu';
+  el.innerHTML = `<button data-act="punt"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>Consulta el mar aquí</button>
+    <button data-act="ruta"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="18.5" r="2.2"/><circle cx="18.5" cy="5.5" r="2.2"/><path d="M8 18.5h7.5a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6H16" stroke-dasharray="2.2 2.8"/></svg>${hasRoute() ? 'Comença una ruta nova aquí' : 'Comença una ruta aquí'}</button>`;
+  // El menú queda per sota dels botons i del requadre de la temperatura de l'esquerra (si no, el taparien).
+  const left = map.getContainer().querySelector('.leaflet-top.leaflet-left');
+  const top = Math.min(left ? left.getBoundingClientRect().bottom - map.getContainer().getBoundingClientRect().top + 8 : 20, map.getSize().y - 130);
+  const pop = L.popup({ className: 'ctx-pop', closeButton: false, offset: [0, -4], autoPanPaddingTopLeft: [20, top], autoPanPaddingBottomRight: [20, 20] }).setLatLng(ll).setContent(el).openOn(map);
+  el.addEventListener('click', (e) => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (!act) return;
+    map.closePopup(pop);
+    if (act === 'punt') pickPoint(ll.lat, ll.lng);
+    else startRouteAt(ll.lat, ll.lng);
+  });
 }
 
 // Mida de cada etiqueta (nota + nom + onada i vent apilats), per poder-les col·locar sense que es trepitgin.
@@ -773,6 +855,7 @@ function renderDetail() {
     return;
   }
   const a = analyze(b, h);
+  const alerts = weatherAlerts(hours, h.t, h.t + SWIM_LEN);
 
   const wins = [0, 1].map((off) => {
     const w = bestWindow(b, hours, dayKeyOffset(off));
@@ -795,6 +878,7 @@ function renderDetail() {
   if (br?.hs != null) facts.push([`Boia ${BUOY.name}`, `${m(br.hs)} m del ${windName(br.dir)} · ${hh(br.t)} h (mesurat, mar obert)`]);
 
   $('dBody').innerHTML = `${b.custom ? pointBlock(b) : ''}
+    ${alertsHtml(alerts)}
     <div class="d-now">
       <div class="lvl score" style="background:${LEVELS[a.level].color}" aria-label="Índex de nedada ${nf1.format(a.score)} sobre 10">${nf1.format(a.score)}<small>/10</small></div>
       <p><b>${LEVELS[a.level].label}</b> · ${dayLabel(h.t)} ${hhmm(h.t)}<br>${sentence(b, h, a)}

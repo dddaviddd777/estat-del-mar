@@ -1,0 +1,5 @@
+{
+  "nota": "Correccions a mà de les sortides d'emergència. add: [lat, lon, tipus (platja, escala, rampa, port o altra), nom]. remove: [lat, lon] treu les sortides d'OSM a menys de 40 m.",
+  "add": [],
+  "remove": []
+}

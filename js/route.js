@@ -1,8 +1,9 @@
 // Rutes de nedada: el recorregut es talla en trams de 250 m, es calcula a quina hora s'hi passarà segons el ritme
 // i, per a cada tram i la seva hora, com estarà el mar (amb la línia de costa real: caps, cales, illes) i
 // quant costarà nedar-hi (vent i corrent a favor o en contra).
-import { analyze, fetchPlaces, localParts, nearBeach, swimWindow, windName } from './marine.js';
+import { analyze, fetchPlaces, localParts, nearBeach, swimWindow, windName, weatherAlerts } from './marine.js';
 import { loadCoast, shelterAt, coastInfo, sectorText, inCoastArea } from './coast.js';
+import { loadExits, exitsAlong } from './exits.js';
 import * as store from './store.js';
 
 export const SAMPLE_M = 250;     // m entre mostres
@@ -38,10 +39,12 @@ let geoCache = null;
 /** Mostres cada 250 m sobre el recorregut dibuixat, amb la costa que veu cadascuna. */
 export async function routeGeometry(pts) {
   const key = JSON.stringify(pts);
-  if (geoCache?.key === key && !geoCache.noCoast) return geoCache;
+  if (geoCache?.key === key && !geoCache.noCoast && !geoCache.noExits) return geoCache;
   // Sense la línia de costa (no s'ha pogut carregar) la ruta es calcula igualment, com a mar obert.
   let noCoast = false;
   try { await loadCoast(); } catch { noCoast = true; }
+  let noExits = false;
+  try { await loadExits(); } catch { noExits = true; }
   const pos = [];
   const total = pathLength(pts);
   const n = Math.max(1, Math.round(total / SAMPLE_M));
@@ -73,26 +76,55 @@ export async function routeGeometry(pts) {
       if (q) { p.sh = q.sh; p.sector = q.sector; p.borrowed = true; break; }
     }
   });
+  const ex = exitsInfo(pts, pos, total);
   // Punts on es demana la previsió: un de cada 3 mostres, i l'últim.
   const wIdx = pos.map((_, i) => i).filter((i) => i % WEATHER_EVERY === 0);
   if (wIdx.at(-1) !== pos.length - 1) wIdx.push(pos.length - 1);
   const wOf = pos.map((_, i) => wIdx.reduce((best, w, j) => (Math.abs(w - i) < Math.abs(wIdx[best] - i) ? j : best), 0));
   const wlocs = wIdx.map((i) => [pos[i].lat, pos[i].lon]);
   geoCache = { key, pts, pos, wOf, wlocs, wkey: wlocs.map(([a, b]) => `${a.toFixed(4)},${b.toFixed(4)}`).join(';'), length: total,
-    outside: pos.some((p) => !inCoastArea(p.lat, p.lon)), onLand: pos.filter((p) => p.land).length, noCoast };
+    outside: pos.some((p) => !inCoastArea(p.lat, p.lon)), onLand: pos.filter((p) => p.land).length, noCoast, noExits, ...ex };
   return geoCache;
 }
 
+// ---------- Sortides d'emergència ----------
+/**
+ * Sortides al llarg del recorregut dibuixat. L'inici compta com a sortida (és on us heu ficat a l'aigua) i el final
+ * també, si és una ruta d'anada o un circuit; en una d'anada i tornada, el final és el gir i no ho és.
+ * A cada mostra: la sortida més propera seguint la ruta (`exit`) i a quants metres (`exitDist`).
+ */
+function exitsInfo(pts, pos, total) {
+  const exits = exitsAlong(pts);
+  const anchors = [{ along: 0, start: true }, ...exits];
+  for (const p of pos) {
+    let best = null;
+    for (const e of exits) { const d = Math.abs(e.along - p.d); if (!best || d < best.d) best = { d, e }; }
+    p.exit = best?.e ?? null;
+    p.exitDist = Math.min(best?.d ?? Infinity, p.d); // l'inici sempre és una sortida
+  }
+  return { exits, anchors, total };
+}
+/** El tram més llarg sense cap sortida, segons si la ruta torna pel mateix camí (el final llavors no és sortida). */
+export function longestGap(geo, back) {
+  const a = geo.anchors.map((x) => x.along);
+  if (!back) a.push(geo.total);
+  let g = { from: 0, to: 0, len: 0, deadEnd: false };
+  for (let i = 1; i < a.length; i++) if (a[i] - a[i - 1] > g.len) g = { from: a[i - 1], to: a[i], len: a[i] - a[i - 1], deadEnd: false };
+  if (back && geo.total - a.at(-1) > g.len) g = { from: a.at(-1), to: geo.total, len: geo.total - a.at(-1), deadEnd: true };
+  return g;
+}
+
 // ---------- Previsió ----------
+const ROUTE_DATA_V = 2; // apujar-ho si canvia el format (2: pressió, CAPE i pluja per als avisos)
 export function cachedRouteData(geo) {
   const c = store.get('routeData', null);
-  return c && c.key === geo.wkey ? c : null;
+  return c && c.v === ROUTE_DATA_V && c.key === geo.wkey ? c : null;
 }
 export async function fetchRouteData(geo, { force = false } = {}) {
   const c = cachedRouteData(geo);
   if (!force && c && Date.now() - c.fetchedAt < DATA_TTL) return c;
   const { times, places } = await fetchPlaces(geo.wlocs.map((p) => p[0]), geo.wlocs.map((p) => p[1]));
-  const d = { key: geo.wkey, fetchedAt: Date.now(), times, places };
+  const d = { v: ROUTE_DATA_V, key: geo.wkey, fetchedAt: Date.now(), times, places };
   store.set('routeData', d);
   return d;
 }
@@ -142,10 +174,29 @@ export function runRoute(geo, data, { start, pace = DEFAULT_PACE, back = true, r
     if (ratio >= 0.06 || windAlong >= 15) effort = 'favor';
     if (ratio <= -0.06 || windAlong <= -15) effort = 'contra';
     out.push({ ...s, lat: p.lat, lon: p.lon, t, h, a, windAlong, curAlong, curModel, vg, windRel, effort, ratio,
-      sector: p.sector, span: p.sh?.span ?? null, near: p.near, land: p.land, facing: b.facing });
+      sector: p.sector, span: p.sh?.span ?? null, near: p.near, land: p.land, facing: b.facing, exit: p.exit,
+      exitDist: back ? p.exitDist : Math.min(p.exitDist, geo.total - p.d) }); // si no torna, el final també és sortida
     if (i < seq.length - 1) t += ((seq[i + 1].d - s.d) / 1000 / vg) * 3600;
   }
-  return summarize(out, { start, v0, back, beyond });
+  const R = summarize(out, { start, v0, back, beyond });
+  R.alerts = routeAlerts(geo, data, start, R.end);
+  R.gap = geo.noExits ? null : longestGap(geo, back); // sense dades de sortides no es pot dir res
+  R.exits = geo.exits;
+  R.drawLen = geo.total;
+  R.reverse = !!reverse;
+  return R;
+}
+
+/** Avisos de temps de tota la nedada (de la sortida a l'arribada, més el marge): els de tots els punts, sense repetir. */
+function routeAlerts(geo, data, from, to) {
+  const byKind = new Map();
+  for (const i of new Set(geo.wOf)) {
+    for (const a of weatherAlerts(data.places[i].hours, from, to)) {
+      const k = byKind.get(a.kind);
+      if (!k || (a.level === 'perill' && k.level !== 'perill')) byKind.set(a.kind, a);
+    }
+  }
+  return [...byKind.values()].sort((a, b) => (a.level === 'perill' ? 0 : 1) - (b.level === 'perill' ? 0 : 1) || a.t - b.t);
 }
 
 function summarize(S, { start, v0, back, beyond }) {
@@ -168,17 +219,25 @@ function summarize(S, { start, v0, back, beyond }) {
   };
 }
 
-/** Trams per a la llista: uns 12 com a molt, cadascun amb la seva pitjor mostra. */
+/**
+ * Trams per a la llista i el mapa (numerats a partir de l'1): uns 12 com a molt, cadascun amb la seva pitjor mostra.
+ * L'anada i la tornada es tallen per separat, perquè cap tram no quedi a cavall del gir.
+ */
 function trams(S) {
   const per = Math.max(2, Math.ceil(S.length / 12));
+  const turn = S.findIndex((s) => s.leg === 'tornada');
+  const legs = turn > 0 ? [[0, turn - 1], [turn - 1, S.length - 1]] : [[0, S.length - 1]];
   const out = [];
-  for (let i = 0; i < S.length - 1; i += per) {
-    const G = S.slice(i, Math.min(S.length, i + per + 1));
+  for (const [a, b] of legs) for (let i = a; i < b; i += per) {
+    // Si només en quedaria un trosset (menys de mig tram), s'enganxa a l'anterior.
+    const end = b - (i + per) < per / 2 ? b : Math.min(b, i + per);
+    const G = S.slice(i, end + 1);
+    if (end === b) i = b;
     const worst = G.reduce((w, s) => (s.a.score < w.a.score ? s : w), G[0]);
     const mid = G[Math.floor(G.length / 2)];
     const avg = (f) => G.reduce((acc, s) => acc + f(s), 0) / G.length;
     const ratio = avg((s) => s.ratio), wind = avg((s) => s.windAlong);
-    out.push({ from: G[0], to: G.at(-1), worst, mid, leg: G[0].leg,
+    out.push({ n: out.length + 1, from: G[0], to: G.at(-1), worst, mid, leg: G.at(-1).leg,
       hs: Math.max(...G.map((s) => s.a.beachHs ?? 0)),
       effort: ratio <= -0.06 || wind <= -15 ? 'contra' : ratio >= 0.06 || wind >= 15 ? 'favor' : 'neutre',
       cur: avg((s) => s.curAlong), windAlong: wind, cape: G.some((s) => s.span >= 220), land: G.some((s) => s.land) });
@@ -202,7 +261,9 @@ export function recommend(geo, data, route) {
   const base = data.times.filter((t) => localParts(t).day === day && localParts(t).hour >= sw.from && localParts(t).hour < sw.to);
   const starts = base.flatMap((t) => [t, t + 1800]).filter((t) => t >= now - 600);
   const dirs = route.back ? [false] : [false, true];
-  const rank = (r) => r.worst.a.level * 100 - (0.6 * r.worst.a.score + 0.4 * r.mean) + (r.duration / r.plain - 1) * 4;
+  // Un avís de perill (tempesta, front) pesa com un nivell més de semàfor; un d'atenció, una mica.
+  const rank = (r) => r.worst.a.level * 100 - (0.6 * r.worst.a.score + 0.4 * r.mean) + (r.duration / r.plain - 1) * 4
+    + r.alerts.reduce((s, a) => s + (a.level === 'perill' ? 100 : 2), 0);
   let best = null;
   for (const start of starts) for (const reverse of dirs) {
     const r = runRoute(geo, data, { ...route, start, reverse });
