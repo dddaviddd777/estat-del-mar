@@ -404,7 +404,7 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 
 /* ---------- Capes d'onades i vent (a l'estil del Windy) ---------- */
 .fld-waves, .fld-wind { position: absolute; left: 0; top: 0; pointer-events: none; }
-.layers-ctl { position: relative; }
+.leaflet-control.layers-ctl { position: relative; z-index: 900; } /* el menú per sobre dels altres controls */
 .layers-ctl > a { display: grid; place-items: center; color: #0b1d2c; }
 .layers-ctl > a:hover { color: #1a73e8; }
 .layers-ctl > a.on { color: #1a73e8; background: #e8f0fe; }

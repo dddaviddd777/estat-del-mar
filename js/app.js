@@ -186,7 +186,8 @@ function initMap() {
   setMarksHidden(store.get('hideMarks', false));
   // Capes d'onades i vent (a l'estil del Windy), amb el seu botó a sota de l'ull.
   initLayers(map, { time: () => data.times[idx] });
-  // Temperatura de l'aigua de tota la costa, a dalt a l'esquerra (és terra: no tapa cap etiqueta).
+  // Temperatura de l'aigua de tota la costa, al racó de dalt a l'esquerra (és terra: no tapa cap etiqueta), per sobre
+  // dels botons: així el menú de capes, que s'obre a la dreta del seu botó, no queda tapat.
   const Sst = L.Control.extend({
     onAdd() {
       const el = L.DomUtil.create('div', 'sst-box');
@@ -195,7 +196,8 @@ function initMap() {
       return el;
     },
   });
-  new Sst({ position: 'topleft' }).addTo(map);
+  const sstEl = new Sst({ position: 'topleft' }).addTo(map).getContainer();
+  sstEl.parentNode.prepend(sstEl);
   // Les etiquetes surten cap a la dreta (mar): deixem-hi lloc perquè les de més a l'est no quedin tallades.
   const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))),
     wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [170, 24] });
