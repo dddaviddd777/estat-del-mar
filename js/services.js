@@ -148,6 +148,6 @@ export function servicesLines(lat, lon, r, html = false) {
  * pagament a 200 m»). Retorna '' si no n'hi ha cap (o si encara no s'han carregat).
  */
 export function servicesHtml(lat, lon, r) {
-  const rows = servicesLines(lat, lon, r, true).map((l) => `<li><span class="svc-ico">${SERVICE_TYPES[l.type].ico}</span>${l.text}</li>`);
+  const rows = servicesLines(lat, lon, r, true).map((l) => `<li><span class="svc-ico">${SERVICE_TYPES[l.type].ico}</span><span>${l.text}</span></li>`);
   return rows.length ? `<ul class="svc-list">${rows.join('')}</ul>` : '';
 }

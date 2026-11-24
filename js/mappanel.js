@@ -40,6 +40,27 @@ const PRESETS = {
 };
 
 let map = null, ui = null, show = { ...DEFAULT };
+// Fons del mapa: OSM o satèl·lit (Esri World Imagery, gratuït amb atribució, amb els noms dels pobles a sobre). La foto
+// ajuda on la platja és poc fonda i al mapa no es distingeix bé la sorra de l'aigua.
+let base = 'mapa', osm = null, sat = null;
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+function setBase(v) {
+  base = v === 'sat' ? 'sat' : 'mapa';
+  if (base === 'sat') {
+    sat ??= L.layerGroup([
+      L.tileLayer(`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 17, maxNativeZoom: 18, attribution: 'Satèl·lit © Esri, Maxar, Earthstar Geographics' }),
+      L.tileLayer(`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 17, opacity: 0.85 }),
+    ]);
+    if (osm && map.hasLayer(osm)) map.removeLayer(osm);
+    if (!map.hasLayer(sat)) { sat.addTo(map); sat.eachLayer((l) => l.bringToBack()); }
+  } else {
+    if (sat && map.hasLayer(sat)) map.removeLayer(sat);
+    if (osm && !map.hasLayer(osm)) { osm.addTo(map); osm.bringToBack(); }
+  }
+  document.body.classList.toggle('sat', base === 'sat');
+  store.set('mapBase', base);
+  if (ui) ui.panel.querySelectorAll('[data-base]').forEach((b) => b.classList.toggle('on', b.dataset.base === base));
+}
 
 function apply() {
   const b = document.body.classList;
@@ -80,6 +101,7 @@ function openPanel(open) {
 /** Crea el botó i el panell. `o.buoyIco`: la icona de les boies (la mateixa del mapa). */
 export function initMapPanel(m, o = {}) {
   map = m;
+  osm = o.osm ?? null;
   const saved = store.get('mapShow', null);
   if (saved) show = { ...DEFAULT, ...saved };
   else if (store.get('hideMarks', false)) show = { ...DEFAULT, platges: false, punts: false, boies: false }; // l'antic botó de l'ull
@@ -91,6 +113,9 @@ export function initMapPanel(m, o = {}) {
       el.innerHTML = `<a href="#" role="button" title="Mapa: capes i llocs" aria-label="Mapa: capes i llocs" aria-expanded="false">${ICO}</a>
         <div class="layers-panel" hidden>
           <div class="mp-top"><b>Mapa</b><button class="mp-x" aria-label="Tanca">✕</button></div>
+          <div class="mp-h">Fons</div>
+          <div class="mp-chips"><button data-base="mapa">Mapa</button><button data-base="sat">Satèl·lit</button></div>
+          <div class="mp-h">Botons ràpids</div>
           <div class="mp-chips">${Object.entries(PRESETS).map(([k, p]) => `<button data-p="${k}">${p.label}</button>`).join('')}</div>
           <div class="mp-h">Temps · colors <small>una a la vegada</small></div>
           ${row('data-l="waves"', grad(WAVE_STOPS, 7), 'Onades', 'alçada (colors) i cap on van')}
@@ -117,6 +142,8 @@ export function initMapPanel(m, o = {}) {
         if (t.dataset.s) { show[t.dataset.s] = t.checked; apply(); }
       });
       panel.addEventListener('click', (e) => {
+        const bs = e.target.closest('[data-base]');
+        if (bs) { setBase(bs.dataset.base); return; }
         const c = e.target.closest('[data-p]');
         if (c) { show = { ...PRESETS[c.dataset.p].show }; apply(); }
       });
@@ -127,6 +154,7 @@ export function initMapPanel(m, o = {}) {
   map.on('click', () => { if (!ui.panel.hidden) openPanel(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ui.panel.hidden) openPanel(false); });
   apply();
+  setBase(store.get('mapBase', 'mapa'));
 }
 
 /** Torna a ensenyar una mena de lloc (p. ex. la ruta quan l'usuari en dibuixa o n'obre una). */

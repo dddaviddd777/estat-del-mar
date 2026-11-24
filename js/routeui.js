@@ -1,7 +1,7 @@
 // Pantalla de les rutes de nedada: dibuixar-la (com al MapTrack: creu al centre, "+ Punt", "Desfer"),
 // pintar-la al mapa per trams amb el color del semàfor i la fitxa "La teva nedada".
-import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS, cachedMarine, rainBefore } from './marine.js';
-import { riverAlert } from './places.js';
+import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS, cachedMarine, rainBefore, nearBeach } from './marine.js';
+import { riverAlert, placesNear, CAVE_ICO, RIVER_ICO, RIVER_RAIN } from './places.js';
 import { servicesHtml, servicesLines } from './services.js';
 import { loadExits, exitsIn, exitName, EXIT_TYPES } from './exits.js';
 import { routeGeometry, fetchRouteData, cachedRouteData, runRoute, recommend, getRoute, saveRoute, deleteRoute,
@@ -249,7 +249,7 @@ function recompute() {
 }
 export const refreshRoute = () => { if (map && getRoute() && !drawing && !busy) analyse(); };
 /** Torna a pintar la fitxa (p. ex. quan arriben els serveis o les desembocadures). */
-export const redrawSheet = () => renderSheet();
+export const redrawSheet = () => { renderSheet(); if (result && !drawing) renderLayer(); };
 
 // ---------- Avisos de temps (també els fa servir app.js) ----------
 export const RADAR_LINKS = '<span class="wx-radar">Radar: <a href="https://www.meteo.cat/observacions/radar" target="_blank" rel="noopener">Meteocat</a> · <a href="https://www.aemet.es/ca/eltiempo/observacion/radar" target="_blank" rel="noopener">AEMET</a></span>';
@@ -373,6 +373,12 @@ function renderLayer() {
   const first = S[0], turn = result.back ? S.find((s, i) => S[i + 1]?.leg === 'tornada') : S.at(-1);
   L.marker(at(first), { icon: L.divIcon({ className: 'r-pin start', html: `<i></i><span>Sortida ${hhmm(first.t)}</span>`, iconSize: [0, 0] }), keyboard: false, zIndexOffset: 900 }).on('click', openSheet).addTo(layer);
   if (turn) L.marker(at(turn), { icon: L.divIcon({ className: 'r-pin end', html: `<i></i><span>${result.back ? 'Gir' : 'Arribada'} ${hhmm(turn.t)}</span>`, iconSize: [0, 0] }), keyboard: false, zIndexOffset: 900 }).on('click', openSheet).addTo(layer);
+  // Coves, puntes i desembocadures per on passa la ruta (també amb els llocs amagats al panell «Mapa»).
+  for (const f of featuresInfo(result).list) {
+    L.marker([f.lat, f.lon], { icon: L.divIcon({ className: `r-feat-dot ${f.kind} ${f.level}`, html: FEAT_ICO[f.kind], iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false, zIndexOffset: 700 })
+      .bindTooltip(`<b>${esc(featHead(f))}</b> · ${featTimes(f)}<br><small>${esc(f.advice)}</small>`, { direction: 'top', offset: [0, -9], className: 'r-feat-tip' })
+      .on('click', openSheet).addTo(layer);
+  }
   const g = result.gap;
   if (g && g.len >= 600 && geo) {
     const mid = (g.from + g.to) / 2;
@@ -569,13 +575,122 @@ function routeAlertsAll(R) {
 
 /** Què hi ha al punt de sortida (i a l'arribada, si no torneu al mateix lloc): bars, dutxes, fonts, pàrquing… */
 const SERVICES_R = 300;
+/**
+ * On es miren els serveis: el punt de sortida i l'altra punta de la ruta (l'arribada, o la platja on gireu si torneu pel
+ * mateix camí), si és a més de 300 m de la sortida. [{ title, lat, lon }].
+ */
+function servicePoints(R, loop) {
+  const S = R.samples, a = S[0];
+  // Si l'extrem és a prop d'una platja de la llista, es busca com a la fitxa de la platja (400 m al voltant del seu
+  // punt); si no, 300 m al voltant d'on comença o gira la ruta (que sovint és una mica mar endins).
+  const spot = (smp, title) => {
+    const b = nearBeach(smp.lat, smp.lon, 1.2);
+    return b ? { title: `${title}: ${b.short}`, lat: b.lat, lon: b.lon, r: 400 } : { title: `${title}${placeLabel(smp)}`, lat: smp.lat, lon: smp.lon, r: SERVICES_R };
+  };
+  const out = [spot(a, 'Al punt de sortida')];
+  const z = R.back ? S.find((x, i) => S[i + 1]?.leg === 'tornada') : S.at(-1);
+  if (z && !loop && distM([a.lat, a.lon], [z.lat, z.lon]) > SERVICES_R) {
+    const e = spot(z, R.back ? 'On gireu' : "A l'arribada");
+    if (e.lat !== out[0].lat || e.lon !== out[0].lon) out.push(e); // si no és la mateixa platja
+  }
+  return out;
+}
+const placeLabel = (smp) => { const n = placeName(smp); return /^km /.test(n) ? '' : `: ${n}`; };
 function servicesBlock(R, loop) {
-  const a = R.samples[0], z = R.samples.at(-1);
-  const parts = [['Al punt de sortida', servicesHtml(a.lat, a.lon, SERVICES_R)]];
-  if (!R.back && !loop) parts.push(["A l'arribada", servicesHtml(z.lat, z.lon, SERVICES_R)]);
-  const got = parts.filter(([, h]) => h);
-  if (!got.length) return '';
-  return got.map(([t, h]) => `<div class="d-h">${t}</div>${h}`).join('') + `<p class="d-note">Serveis d'OpenStreetMap a menys de ${SERVICES_R} m (poden ser de temporada).</p>`;
+  const parts = servicePoints(R, loop).map((p) => [p.title, servicesHtml(p.lat, p.lon, p.r)]);
+  if (!parts.some(([, h]) => h)) return '';
+  return parts.map(([t, h]) => `<div class="d-h">${esc(t)}</div>${h || '<p class="d-note">Cap servei a prop segons OpenStreetMap.</p>'}`).join('')
+    + `<p class="d-note">Serveis d'OpenStreetMap a menys de 300-400 m (poden ser de temporada). Toca el nom d'un bar per obrir-lo a Google Maps, o «com arribar-hi» del pàrquing.</p>`;
+}
+
+// ---------- Coves, puntes i desembocadures al llarg de la ruta ----------
+// Les coves són on soleu entrar a explorar; a les puntes el mar sol estar més picat i hi corre més el corrent; a les
+// desembocadures, després de pluja, l'aigua baixa tèrbola i bruta.
+const CAVE_R = 150, RIVER_R = 500, CAPE_NAME_R = 500;
+export const CAPE_ICO = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.2 18.6 17.3H1.4z" fill="#e8892b" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 7.6v4.4" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="14.5" r="1.1" fill="#fff"/></svg>';
+const FEAT_ICO = { cova: CAVE_ICO, punta: CAPE_ICO, riu: RIVER_ICO };
+const roughness = (x) => (x.a.beachHs ?? 0) + (x.h.wind ?? 0) / 40;
+
+/**
+ * Coves (a menys de 150 m), puntes (on el mar s'obre per més de 220°) i desembocadures (a menys de 500 m) per on passa
+ * la ruta, en l'ordre en què s'hi passa: hores de pas, com estarà el mar i què cal tenir en compte. Sense HTML.
+ */
+function featuresInfo(R) {
+  if (!geo) return { list: [], rivers: 0, mm: null };
+  const S = R.samples;
+  const at = (i0, i1 = i0) => S.filter((x) => x.pos >= i0 && x.pos <= i1);
+  const passes = (L) => {
+    const byLeg = new Map();
+    for (const x of L) if (!byLeg.has(x.leg) || x.t < byLeg.get(x.leg).t) byLeg.set(x.leg, x);
+    return [...byLeg.values()].sort((a, b) => a.t - b.t).map((x) => ({ t: x.t, leg: x.leg }));
+  };
+  const cond = (w) => ({ hs: w.a.beachHs, seaFrom: w.a.sea?.comps?.[0] ? windName(w.a.sea.comps[0].dir) : null,
+    wind: w.h.wind, windFrom: w.h.windDir == null ? null : windName(w.h.windDir), gust: w.h.gust });
+  const near = (type, r) => {
+    const m = new Map();
+    geo.pos.forEach((p, i) => {
+      for (const c of placesNear(p.lat, p.lon, type, r)) {
+        const k = `${c.lat},${c.lon}`;
+        if (!m.has(k) || c.dist < m.get(k).dist) m.set(k, { ...c, i });
+      }
+    });
+    return [...m.values()];
+  };
+  const list = [];
+  for (const c of near('cova', CAVE_R)) {
+    const L = at(c.i);
+    if (!L.length) continue;
+    const w = L.reduce((b, x) => (roughness(x) > roughness(b) ? x : b), L[0]), k = cond(w);
+    const hs = k.hs ?? 0;
+    const [level, advice] = hs < 0.25 && (k.wind ?? 0) < 20 ? ['ok', "Mar calmat: s'hi pot entrar, amb compte, d'un en un i sense perdre de vista la sortida."]
+      : hs < 0.5 ? ['atencio', "Una mica d'onada: abans d'entrar-hi, mireu des de fora si l'aigua hi xucla i rebota."]
+        : ['perill', "No hi entreu: amb aquesta onada l'aigua hi xucla i rebota contra la roca."];
+    list.push({ kind: 'cova', name: c.name ?? 'sense nom', lat: c.lat, lon: c.lon, dist: c.dist, times: passes(L), ...k, level, advice });
+  }
+  for (const c of geo.capes ?? []) {
+    const L = at(c.a, c.b);
+    if (!L.length) continue;
+    const p = geo.pos[c.i];
+    const w = L.reduce((b, x) => ((x.a.capePen ?? 0) + roughness(x) > (b.a.capePen ?? 0) + roughness(b) ? x : b), L[0]), k = cond(w);
+    const pen = w.a.capePen ?? 0, hs = k.hs ?? 0;
+    const cap = placesNear(p.lat, p.lon, 'cap', CAPE_NAME_R)[0];
+    const name = cap?.name ?? (p.near ? `prop de ${p.near}` : `al km ${nf1.format(p.d / 1000)}`);
+    const cur = w.h.cur && w.h.cur[0] >= 0.6 ? ` Mar endins, el model dona un corrent de ${nf1.format(w.h.cur[0])} km/h cap al ${windName(w.h.cur[1])}: a la punta s'hi pot accelerar.` : '';
+    const [level, advice] = !pen ? ['ok', `Avui hauria d'estar tranquil·la. A les puntes sol córrer més el corrent: no us hi atureu gaire.${cur}`]
+      : hs >= 0.8 ? ['perill', `Mar picat i rebot de l'onada contra la roca: passeu-hi lluny de les roques i, si no ho veieu clar, gireu abans.${cur}`]
+        : ['atencio', `Hi pot haver mar més picat (l'onada hi rebota i s'hi creua) i corrent: passeu-hi una mica més separats de la roca i junts.${cur}`];
+    list.push({ kind: 'punta', name, named: !!cap, lat: p.lat, lon: p.lon, times: passes(L), ...k, pen, level, advice });
+  }
+  const s0 = S[0];
+  const mm = rainBefore(cachedMarine(), s0.lat, s0.lon, R.start);
+  const rivers = near('riu', RIVER_R);
+  for (const c of rivers) {
+    const L = at(c.i);
+    if (!L.length) continue;
+    const rain = mm != null && mm >= RIVER_RAIN;
+    const advice = rain ? `Han caigut ${Math.round(mm)} mm en 48 hores: l'aigua hi pot baixar tèrbola i bruta (fang, branques, deixalles) durant un o dos dies.`
+      : mm != null ? `No ha plogut gaire (${Math.round(mm)} mm en 48 hores): l'aigua hauria d'estar neta. Després de pluja hi baixa tèrbola i bruta.`
+        : 'Després de pluja hi baixa aigua tèrbola i bruta.';
+    list.push({ kind: 'riu', name: c.name ?? 'riera sense nom', lat: c.lat, lon: c.lon, dist: c.dist, times: passes(L), level: rain ? 'atencio' : 'ok', advice });
+  }
+  list.sort((a, b) => a.times[0].t - b.times[0].t);
+  return { list, rivers: rivers.length, mm };
+}
+/** Títol d'un lloc: «Cova: Cova d'en Gispert», «Punta: Cap Gros», «Punta prop de Tamariu», «Desembocadura: Ridaura». */
+const featHead = (f) => (f.kind === 'cova' ? `Cova: ${f.name}` : f.kind === 'riu' ? `Desembocadura: ${f.name}` : f.named ? `Punta: ${f.name}` : `Punta ${f.name}`);
+/** Hores de pas: «09:35» o «09:35 i 10:40 (tornada)». */
+const featTimes = (f) => f.times.map((x, j) => `${hhmm(x.t)}${j && x.leg === 'tornada' ? ' (tornada)' : ''}`).join(' i ');
+const featCond = (f) => (f.kind === 'riu' ? '' : `onada ${m1(f.hs)} m${f.seaFrom ? ` del ${f.seaFrom}` : ''}${f.wind != null ? ` · vent ${Math.round(f.wind)} km/h${f.windFrom ? ` del ${f.windFrom}` : ''}` : ''}`);
+const NO_RIVER = `Cap desembocadura de riu o riera a menys de ${RIVER_R} m de la ruta: la pluja no hi enterboleix l'aigua.`;
+function featuresHtml(R) {
+  const F = featuresInfo(R);
+  const items = F.list.map((f) => `<li class="${f.level}"><span class="rf-ico">${FEAT_ICO[f.kind]}</span><div>
+      <b>${esc(featHead(f))}</b> <span class="rf-t">${featTimes(f)}${f.dist != null ? ` · a ${fmtDist(Math.max(10, f.dist))} de la ruta` : ''}</span>
+      ${featCond(f) ? `<small>${featCond(f)}</small>` : ''}<p>${esc(f.advice)}</p></div></li>`);
+  const noRiver = F.rivers ? '' : `<p class="d-note">${NO_RIVER}</p>`;
+  const head = '<div class="d-h">Coves, puntes i desembocadures</div>';
+  if (!items.length) return `${head}<p class="d-note">La ruta no passa per cap cova ni per cap punta exposada.</p>${noRiver}`;
+  return `${head}<ul class="r-feat">${items.join('')}</ul>${noRiver}`;
 }
 
 // ---------- PDF ----------
@@ -611,9 +726,9 @@ function pdfInfo(r, R) {
   const day = fmt({ weekday: 'long', day: 'numeric', month: 'long' }).format(R.start * 1000);
   const pace = r.pace ?? DEFAULT_PACE;
   const wl = LEVELS[R.worst.a.level];
-  const a = S[0], z = S.at(-1);
-  const services = [{ title: 'Al punt de sortida', lines: servicesLines(a.lat, a.lon, SERVICES_R) }];
-  if (!R.back && !loop) services.push({ title: "A l'arribada", lines: servicesLines(z.lat, z.lon, SERVICES_R) });
+  const services = servicePoints(R, loop).map((p) => ({ title: p.title, lines: servicesLines(p.lat, p.lon, p.r) }));
+  const F = featuresInfo(R);
+  const features = F.list.map((f) => ({ kind: f.kind, level: f.level, lat: f.lat, lon: f.lon, dist: f.dist, head: featHead(f), times: featTimes(f), cond: featCond(f).replace(/ · /g, ', '), advice: f.advice }));
   const got = data?.fetchedAt ? data.fetchedAt / 1000 : Date.now() / 1000;
   return {
     R, title,
@@ -632,7 +747,7 @@ function pdfInfo(r, R) {
     rec: rec ? stripHtml(recHtml(r).replace(/<button[\s\S]*?<\/button>/, '')) : null,
     alerts: routeAlertsAll(R),
     trams: R.trams.map(tramInfo),
-    services,
+    services, features, noRiver: F.rivers ? null : NO_RIVER,
     positions: (off) => drawPositions(S, off),
     note: "Com es calcula: cada 250 m, la nota (0-10) combina l'onada que hi arriba (d'on ve, alçada, període i abric de la costa real) amb el vent i les ratxes a l'hora que hi passareu; més de 7 = bo, de 4 a 7 = mogut, 4 o menys = mala mar. El corrent és una estimació i la marea no compta. "
       + `Previsió d'Open-Meteo (onades: Météo-France; vent: AROME) del ${fmt({ day: 'numeric', month: 'numeric' }).format(got * 1000)} a les ${hhmm(got)}; sortides i serveis d'OpenStreetMap. `
@@ -689,6 +804,7 @@ function renderSheet() {
       <div class="r-chart">${chartHtml(R)}</div>
       <div class="d-h">Trams <button class="info-btn" data-help="rutes" aria-label="Com es calcula">i</button></div>
       ${tramsHtml(R)}
+      ${featuresHtml(R)}
       ${servicesBlock(R, loop)}
       ${pdfHtml(R)}
       <p class="d-note">Cada 250 m es mira per on hi pot arribar l'onada segons la línia de costa real (caps, cales i illes) i quin temps farà a l'hora que hi passareu. El corrent és una estimació: la meitat del que dona el model mar endins (cel·les de ~8 km) més un 2 % del vent. A la Costa Brava la marea és de pocs centímetres i no es té en compte. Dades de les ${hhmm(data.fetchedAt / 1000)}${busy ? ' · actualitzant…' : ''}.</p>`;

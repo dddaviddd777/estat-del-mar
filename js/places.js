@@ -6,6 +6,7 @@ export const PLACE_TYPES = {
   cova: { label: 'cova', zoom: 13 },
   far: { label: 'far', zoom: 11 },
   riu: { label: 'desembocadura', zoom: 12 },
+  cap: { label: 'cap', zoom: Infinity }, // no es dibuixa: dona nom a les puntes de les rutes
 };
 const REMOVE_R = 40;
 const KY = 111320;

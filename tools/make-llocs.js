@@ -6,13 +6,14 @@ const path = require('path');
 const { coastDist, download, writeData, dedupe } = require('./osm.js');
 
 const OUT = path.join(__dirname, '..', 'data', 'llocs.json');
-const TYPES = ['cova', 'far', 'riu'];
+const TYPES = ['cova', 'far', 'riu', 'cap'];
 // Com de prop de la línia de costa (m): una cova de mar té la boca a l'aigua; un far, dalt del cap; un riu hi acaba.
-const NEAR = { cova: 60, far: 300, riu: 80 };
+// Els caps amb nom (natural=cape) no es dibuixen: donen nom a les puntes per on passa una ruta.
+const NEAR = { cova: 60, far: 300, riu: 80, cap: 300 };
 
 (async () => {
   const els = await download('llocs', (b) =>
-    `nwr["natural"="cave_entrance"](${b});nwr["man_made"="lighthouse"](${b});way["waterway"="river"](${b});way["waterway"="stream"]["name"](${b});`,
+    `nwr["natural"="cave_entrance"](${b});nwr["man_made"="lighthouse"](${b});node["natural"="cape"]["name"](${b});way["waterway"="river"](${b});way["waterway"="stream"]["name"](${b});`,
   { out: 'out geom tags;' });
   const out = [];
   for (const e of els) {
@@ -24,7 +25,7 @@ const NEAR = { cova: 60, far: 300, riu: 80 };
       for (const p of [g[0], g.at(-1)]) if (coastDist(p.lat, p.lon) <= NEAR.riu) out.push({ lat: p.lat, lon: p.lon, type: 'riu', name: t.name ?? null });
       continue;
     }
-    const type = t.natural === 'cave_entrance' ? 'cova' : t.man_made === 'lighthouse' ? 'far' : null;
+    const type = t.natural === 'cave_entrance' ? 'cova' : t.man_made === 'lighthouse' ? 'far' : t.natural === 'cape' ? 'cap' : null;
     if (!type) continue;
     // A OSM, els llums d'entrada dels ports (dics i escullera) també són man_made=lighthouse, però no tenen nom ni són
     // edificis i s'hi veuen a 3-5 milles: a Palamós en sortien set. Els fars de veritat tenen nom (Far de Palamós, de

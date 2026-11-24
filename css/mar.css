@@ -331,7 +331,7 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .r-num span { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; box-sizing: border-box; display: grid; place-items: center; border-radius: 5px;
   border: 2.5px solid #0b1d2c; background: #fff; color: #0b1d2c; font: 700 11px/1 system-ui, sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); cursor: pointer; }
 .r-num span.tornada { background: #0b1d2c; color: #fff; }
-.route-far .r-tick, .route-far .r-arrow, .route-far .r-worst, .route-far .r-pin span, .route-far .r-num { display: none; }
+.route-far .r-tick, .route-far .r-arrow, .route-far .r-worst, .route-far .r-pin span, .route-far .r-num, .route-far .r-feat-dot { display: none; }
 /* Fitxa "La teva nedada" */
 .r-set { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .r-set label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -483,3 +483,19 @@ body.routing .fld-legend, body.routing .fld-read { display: none; }
 .svc-pop .gm-link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; background: #1a73e8; color: #fff !important; font-weight: 600; text-decoration: none; }
 .svc-popup .leaflet-popup-content { margin: 10px 12px; }
 .svc-list .gm-link { color: #9fd0ff; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Coves, puntes i desembocadures al llarg de la ruta (fitxa i mapa) */
+.r-feat { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 7px; }
+.r-feat li { display: flex; gap: 9px; padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,.06); border-left: 3px solid rgba(255,255,255,.25); font-size: 14px; line-height: 1.35; }
+.r-feat li.atencio { border-left-color: #f2b33d; }
+.r-feat li.perill { border-left-color: #e5534b; background: rgba(229,83,75,.12); }
+.r-feat li.ok { border-left-color: #3ccf7a; }
+.r-feat .rf-ico { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+.r-feat .rf-ico svg { width: 20px; height: 20px; display: block; }
+.r-feat .rf-t { opacity: .75; font-size: 13px; }
+.r-feat small { display: block; opacity: .8; font-size: 12.5px; }
+.r-feat p { margin: 3px 0 0; font-size: 13px; opacity: .92; }
+.r-feat-dot svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+.r-feat-tip { max-width: 240px; white-space: normal; }
+/* Fons de satèl·lit: color de fons mentre arriben les fotos */
+body.sat .leaflet-container { background: #1d2b36; }

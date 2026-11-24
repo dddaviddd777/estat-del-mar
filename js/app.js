@@ -178,7 +178,8 @@ function initMap() {
     e.preventDefault();
     map.setZoomAround(map.mouseEventToContainerPoint(e), map.getZoom() + (e.deltaY < 0 ? 0.5 : -0.5));
   }, { passive: false });
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Fons: el mapa d'OSM o la foto de satèl·lit (es tria al panell «Mapa»).
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 17,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
@@ -191,7 +192,7 @@ function initMap() {
   initLayers(map, { time: () => data.times[idx] });
   initPlaces(map);
   initServices(map);
-  initMapPanel(map, { buoyIco: BUOY_ICO });
+  initMapPanel(map, { buoyIco: BUOY_ICO, osm });
   // Desembocadures (avís després de pluja) i serveis (fitxa de la platja): en arribar, es tornen a pintar els avisos.
   Promise.allSettled([loadPlaces(), loadServices()]).then(() => { if (data) renderAlerts(); if (selected) renderDetail(); redrawSheet(); });
   // Temperatura de l'aigua de tota la costa, al racó de dalt a l'esquerra (és terra: no tapa cap etiqueta), per sobre

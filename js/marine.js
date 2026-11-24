@@ -361,16 +361,21 @@ export function localParts(t) {
 export const todayKey = () => localParts(Date.now() / 1000).day;
 export function dayKeyOffset(offset) { return localParts(Date.now() / 1000 + offset * 86400).day; }
 
-export function swimWindow() {
-  return store.get('swimWindow', { from: 6, to: 12 });
+// Franja on es busca la millor hora per nedar (24/11/2026, l'usuari: "anem a nedar quan es pot i es vol"): de 8 a 19 h
+// amb l'horari d'estiu i de 8 a 14 h amb el d'hivern (abans de 6 a 12 h). Només serveix per recomanar una hora millor.
+const isSummerTime = (t) => (localParts(t).hour - new Date(t * 1000).getUTCHours() + 24) % 24 === 2;
+const dayNoon = (day) => Date.parse(`${day}T12:00:00Z`) / 1000;
+export function swimWindow(t = Date.now() / 1000) {
+  if (typeof t === 'string') t = dayNoon(t);
+  return isSummerTime(t) ? { from: 8, to: 19 } : { from: 8, to: 14 };
 }
 
 /**
- * Millor finestra de 2 hores dins la franja habitual (per defecte 6–12 h) d'un dia.
+ * Millor finestra de 2 hores dins la franja de bany d'aquell dia (8-19 h a l'estiu, 8-14 h a l'hivern).
  * Retorna null si la franja d'aquell dia ja ha passat.
  */
 export function bestWindow(beach, hours, day, len = 2) {
-  const { from, to } = swimWindow();
+  const { from, to } = swimWindow(day);
   const now = Date.now() / 1000;
   const cand = hours.filter((h) => { const p = localParts(h.t); return p.day === day && p.hour >= from && p.hour < to && h.t + 3600 > now; });
   if (cand.length < len) return null;

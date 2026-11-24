@@ -13,6 +13,14 @@ export const DEFAULT_PACE = 120; // s per 100 m (2:00 /100 m = 3 km/h)
 // Corrent de superfície a prop de costa (estimació a calibrar): la meitat del corrent del model, que és de mar
 // endins (cel·les de ~8 km), més un 2 % del vent local, que arrossega l'aigua de la superfície.
 const CUR_MODEL = 0.5, CUR_WIND = 0.02;
+// Puntes (caps): mostres a menys de 400 m de la costa on el mar s'obre en més de 220°. Allà l'onada rebota i es creua
+// i el corrent s'hi accelera: amb onada o vent es resta una mica a la nota (fins a 1,2 punts; res amb el mar pla).
+export const CAPE_SPAN = 220, CAPE_NEAR = 400;
+export function capePenalty(hs, wind) {
+  const p = (hs ?? 0) * 1.5 + Math.max(0, (wind ?? 0) - 10) / 30;
+  return p < 0.2 ? 0 : Math.min(1.2, Math.round(p * 10) / 10);
+}
+const levelOf = (sc) => (sc > 7 ? 0 : sc > 4 ? 1 : 2);
 
 const rad = (d) => (d * Math.PI) / 180;
 const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; };
@@ -76,6 +84,15 @@ export async function routeGeometry(pts) {
       if (q) { p.sh = q.sh; p.sector = q.sector; p.borrowed = true; break; }
     }
   });
+  // Puntes: trossos seguits de mostres de cap (es deixa passar una mostra que no ho sigui).
+  pos.forEach((p) => { p.cape = !!(p.sh && p.ci && !p.land && p.ci.dist < CAPE_NEAR && p.sh.span >= CAPE_SPAN); });
+  const capes = [];
+  pos.forEach((p, i) => {
+    if (!p.cape) return;
+    const c = capes.at(-1);
+    if (c && i - c.b <= 2) c.b = i; else capes.push({ a: i, b: i });
+  });
+  for (const c of capes) c.i = pos.slice(c.a, c.b + 1).reduce((bi, q, k) => (q.sh.span > pos[bi].sh.span ? c.a + k : bi), c.a);
   const ex = exitsInfo(pts, pos, total);
   // Punts on es demana la previsió: un de cada 3 mostres, i l'últim.
   const wIdx = pos.map((_, i) => i).filter((i) => i % WEATHER_EVERY === 0);
@@ -83,7 +100,7 @@ export async function routeGeometry(pts) {
   const wOf = pos.map((_, i) => wIdx.reduce((best, w, j) => (Math.abs(w - i) < Math.abs(wIdx[best] - i) ? j : best), 0));
   const wlocs = wIdx.map((i) => [pos[i].lat, pos[i].lon]);
   geoCache = { key, pts, pos, wOf, wlocs, wkey: wlocs.map(([a, b]) => `${a.toFixed(4)},${b.toFixed(4)}`).join(';'), length: total,
-    outside: pos.some((p) => !inCoastArea(p.lat, p.lon)), onLand: pos.filter((p) => p.land).length, noCoast, noExits, ...ex };
+    outside: pos.some((p) => !inCoastArea(p.lat, p.lon)), onLand: pos.filter((p) => p.land).length, capes, noCoast, noExits, ...ex };
   return geoCache;
 }
 
@@ -164,6 +181,15 @@ export function runRoute(geo, data, { start, pace = DEFAULT_PACE, back = true, r
     // L'orientació surt de la costa real; si no n'hi ha (fora de la zona), es calcula com a mar obert.
     const b = { facing: p.sh?.facing ?? null, open: 90, shelter: p.sh };
     const a = analyze(b, h);
+    if (p.cape) {
+      const pen = capePenalty(a.beachHs, h.wind);
+      if (pen && h.code < 95) {
+        a.score = Math.max(0, Math.round((a.score - pen) * 10) / 10);
+        a.level = levelOf(a.score);
+        a.capePen = pen;
+        a.why = [...a.why, 'punta: mar més picat'];
+      }
+    }
     const windAlong = h.wind == null ? 0 : h.wind * Math.cos(rad((h.windDir + 180) - s.heading)); // + = d'esquena
     const curModel = h.cur ? h.cur[0] * Math.cos(rad(h.cur[1] - s.heading)) : 0;
     const curAlong = CUR_MODEL * curModel + CUR_WIND * windAlong; // km/h, + = a favor
@@ -174,7 +200,7 @@ export function runRoute(geo, data, { start, pace = DEFAULT_PACE, back = true, r
     if (ratio >= 0.06 || windAlong >= 15) effort = 'favor';
     if (ratio <= -0.06 || windAlong <= -15) effort = 'contra';
     out.push({ ...s, lat: p.lat, lon: p.lon, t, h, a, windAlong, curAlong, curModel, vg, windRel, effort, ratio,
-      sector: p.sector, span: p.sh?.span ?? null, near: p.near, land: p.land, facing: b.facing, exit: p.exit,
+      sector: p.sector, span: p.sh?.span ?? null, cape: p.cape, near: p.near, land: p.land, facing: b.facing, exit: p.exit,
       exitDist: back ? p.exitDist : Math.min(p.exitDist, geo.total - p.d) }); // si no torna, el final també és sortida
     if (i < seq.length - 1) t += ((seq[i + 1].d - s.d) / 1000 / vg) * 3600;
   }
@@ -240,7 +266,7 @@ function trams(S) {
     out.push({ n: out.length + 1, from: G[0], to: G.at(-1), worst, mid, leg: G.at(-1).leg,
       hs: Math.max(...G.map((s) => s.a.beachHs ?? 0)),
       effort: ratio <= -0.06 || wind <= -15 ? 'contra' : ratio >= 0.06 || wind >= 15 ? 'favor' : 'neutre',
-      cur: avg((s) => s.curAlong), windAlong: wind, cape: G.some((s) => s.span >= 220), land: G.some((s) => s.land) });
+      cur: avg((s) => s.curAlong), windAlong: wind, cape: G.some((s) => s.cape), land: G.some((s) => s.land) });
   }
   return out;
 }
@@ -256,7 +282,7 @@ export const headingName = (deg) => `cap al ${windName(deg)}`;
  */
 export function recommend(geo, data, route) {
   const day = localParts(route.start).day;
-  const sw = swimWindow();
+  const sw = swimWindow(route.start);
   const now = Date.now() / 1000;
   const base = data.times.filter((t) => localParts(t).day === day && localParts(t).hour >= sw.from && localParts(t).hour < sw.to);
   const starts = base.flatMap((t) => [t, t + 1800]).filter((t) => t >= now - 600);
