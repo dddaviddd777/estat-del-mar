@@ -1,5 +1,5 @@
 {
- "actualitzat": "2026-11-24T23:12:13.795Z",
+ "actualitzat": "2026-11-24T23:59:56.437Z",
  "boies": {
   "begur": {
    "nom": "Cap de Begur",
@@ -13,7 +13,7 @@
    "sst": 16,
    "m": {
     "main": 0.82,
-    "ecmwf": 1,
+    "ecmwf": 1.04,
     "gfs": 1.22,
     "dwd": 1.2
    }
