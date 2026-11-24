@@ -1,0 +1,5 @@
+{
+  "nota": "Correccions a mà dels serveis d'OSM. add: [lat, lon, tipus (bar, dutxa, aigua, wc, parking, socorrista), nom, extres (1 = de pagament, 2 = places adaptades)]. remove: [lat, lon] (treu el que hi hagi a menys de 30 m).",
+  "add": [],
+  "remove": []
+}

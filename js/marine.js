@@ -76,7 +76,7 @@ export const WAVE_MODELS = [
   { id: 'gfs', api: 'ncep_gfswave025', name: 'GFS Wave', note: 'EUA · també al Windy' },
   { id: 'dwd', api: 'dwd_ewam', name: 'DWD EWAM', note: 'Alemanya · més fi' },
 ];
-const DATA_VERSION = 5; // apujar-ho si canvia el format de les dades desades
+const DATA_VERSION = 6; // apujar-ho si canvia el format de les dades desades
 
 // ---------- Descàrrega ----------
 export function cachedMarine() {
@@ -118,13 +118,38 @@ export async function fetchPlaces(lats, lons) {
 export async function fetchMarine({ force = false } = {}) {
   const cached = cachedMarine();
   if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
-  const { ma, wa, xa } = await download(BEACHES.map((b) => b.lat), BEACHES.map((b) => b.lon));
+  const lats = BEACHES.map((b) => b.lat), lons = BEACHES.map((b) => b.lon);
+  const [{ ma, wa, xa }, rain] = await Promise.all([download(lats, lons), fetchRain(lats, lons)]);
   const times = ma[0].hourly.time;
   const beaches = {};
   BEACHES.forEach((b, i) => { beaches[b.id] = toHours(ma[i].hourly, wa[i].hourly, xa?.[i]?.hourly); });
-  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches };
+  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches, rain };
   store.set('marine', data);
   return data;
+}
+
+/**
+ * Pluja a terra (AROME) des de dos dies enrere fins al final de la previsió, per a l'avís de les desembocadures:
+ * { t0 (s), b: { id: [mm per hora] } }. És opcional: si falla, no hi ha avís.
+ */
+async function fetchRain(lats, lons) {
+  try {
+    const r = [].concat(await getJson(`https://api.open-meteo.com/v1/forecast?latitude=${lats.join(',')}&longitude=${lons.join(',')}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&past_days=2&forecast_days=4&hourly=precipitation&cell_selection=land`));
+    return { t0: r[0].hourly.time[0], b: Object.fromEntries(BEACHES.map((b, i) => [b.id, r[i].hourly.precipitation.map((v) => (v == null ? 0 : Math.round(v * 10) / 10))])) };
+  } catch { return null; }
+}
+
+/** Pluja acumulada (mm) les `hrs` hores abans de `t` a la platja més propera al punt (null si no hi ha dades). */
+export function rainBefore(data, lat, lon, t, hrs = 48) {
+  const R = data?.rain;
+  if (!R) return null;
+  const b = BEACHES.reduce((a, x) => (distKm(lat, lon, x.lat, x.lon) < distKm(lat, lon, a.lat, a.lon) ? x : a));
+  const s = R.b[b.id];
+  const k1 = Math.min(s?.length ?? 0, Math.floor((t - R.t0) / 3600) + 1);
+  if (k1 <= 0) return null;
+  let sum = 0;
+  for (let k = Math.max(0, k1 - hrs); k < k1; k++) sum += s[k];
+  return sum;
 }
 
 /**

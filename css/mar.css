@@ -417,6 +417,15 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .mp-chips button:hover { background: #eef3f8; }
 .mp-chips button.on { background: #e8f0fe; border-color: #1a73e8; color: #174ea6; }
 .mp-h { font-size: 11px; font-weight: 600; color: #5b6b78; text-transform: uppercase; letter-spacing: .04em; margin: 9px 0 1px; }
+.mp-h small { text-transform: none; letter-spacing: 0; font-weight: 500; color: #8794a0; margin-left: 4px; }
+.mp-svc { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0 2px; }
+.mp-svc label { cursor: pointer; }
+.mp-svc input { position: absolute; opacity: 0; pointer-events: none; }
+.mp-svc span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px 3px 4px; border-radius: 12px; border: 1px solid #c9d2da; background: #fff; color: #44535f; }
+.mp-svc span svg { width: 16px; height: 16px; opacity: .55; }
+.mp-svc input:checked + span { background: #e8f0fe; border-color: #1a73e8; color: #174ea6; }
+.mp-svc input:checked + span svg { opacity: 1; }
+.mp-svc input:focus-visible + span { outline: 2px solid #1a73e8; outline-offset: 1px; }
 .mp-row { display: flex; align-items: center; gap: 9px; padding: 5px 0; cursor: pointer; border-top: 1px solid #edf0f3; }
 .mp-ico { flex: none; width: 20px; height: 20px; display: grid; place-items: center; }
 .mp-ico svg { display: block; width: 20px; height: 20px; }
@@ -434,6 +443,13 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 /* Coves i fars al mapa */
 .place-dot { background: none; border: 0; }
 .place-dot svg { display: block; width: 18px; height: 18px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.svc-dot { background: none; border: 0; }
+.svc-dot svg { display: block; width: 16px; height: 16px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+/* Serveis a prop, a la fitxa de la platja i a la de la ruta */
+.svc-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.svc-list li { display: flex; align-items: center; gap: 9px; line-height: 1.3; }
+.svc-ico { flex: none; display: grid; }
+.svc-ico svg { width: 20px; height: 20px; }
 .exit-dot.port svg { width: 17px; height: 17px; }
 .fld-legend { position: absolute; left: 8px; bottom: 22px; z-index: 800; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px;
   background: rgba(255, 255, 255, .9); color: #0b1d2c; font: 600 10.5px/1.2 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
@@ -441,10 +457,22 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .fld-legend i { display: block; height: 7px; border-radius: 4px; }
 .fld-legend small { grid-column: 2; display: flex; justify-content: space-between; font-weight: 500; font-size: 9.5px; color: #44535f; }
 .fld-legend small em { font-style: normal; }
-.fld-legend p { margin: 0; font-weight: 500; }
+.fld-legend p { margin: 0; font-weight: 500; max-width: 170px; }
 .fld-legend p.err { color: #b3261e; max-width: 170px; }
 .fld-read { position: absolute; left: 8px; bottom: 22px; z-index: 800; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; border-radius: 8px;
   background: rgba(11, 29, 44, .88); color: #fff; font: 500 12px/1.25 system-ui, sans-serif; pointer-events: none; }
 .fld-read span { display: flex; align-items: center; gap: 6px; }
 .fld-read i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 body.routing .fld-legend, body.routing .fld-read { display: none; }
+
+/* Desa la ruta en PDF (fitxa de la ruta) */
+.r-pdf { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 18px 0 4px; padding: 11px 14px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .1); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.r-pdf:hover { background: rgba(255, 255, 255, .16); }
+.r-pdf:disabled { opacity: .6; cursor: progress; }
+.r-pdf-st { margin: 6px 0 0; font-size: 13px; opacity: .85; }
+.r-pdf-st.err { color: #ffb4a8; opacity: 1; }
+.r-pdf-ok { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+.r-pdf-ok span { flex: 1 1 100%; overflow-wrap: anywhere; }
+.r-pdf-ok button, .r-pdf-ok a { padding: 7px 14px; border-radius: 10px; border: 0; background: #1a73e8; color: #fff; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+.r-pdf-ok a, .r-pdf-ok button + button { background: rgba(255, 255, 255, .14); }

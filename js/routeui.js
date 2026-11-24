@@ -1,6 +1,8 @@
 // Pantalla de les rutes de nedada: dibuixar-la (com al MapTrack: creu al centre, "+ Punt", "Desfer"),
 // pintar-la al mapa per trams amb el color del semàfor i la fitxa "La teva nedada".
-import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS } from './marine.js';
+import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS, cachedMarine, rainBefore } from './marine.js';
+import { riverAlert } from './places.js';
+import { servicesHtml, servicesLines } from './services.js';
 import { loadExits, exitsIn, exitName, EXIT_TYPES } from './exits.js';
 import { routeGeometry, fetchRouteData, cachedRouteData, runRoute, recommend, getRoute, saveRoute, deleteRoute,
   pathLength, isLoop, distM, bearing, DEFAULT_PACE, placeName, headingName } from './route.js';
@@ -78,6 +80,7 @@ export function initRoutes(m, c) {
   $('rClose').onclick = closeSheet;
   $('routeSheet').addEventListener('click', (e) => { if (e.target === $('routeSheet')) closeSheet(); });
   $('rEdit').onclick = () => { const r = getRoute(); if (r) startDraw(r.pts); };
+  $('rPdf').onclick = () => exportPdf();
   $('rDel').onclick = () => {
     if (!confirm('Vols esborrar aquesta ruta?')) return;
     deleteRoute(); result = rec = geo = data = null; closeSheet(); renderLayer();
@@ -245,6 +248,8 @@ function recompute() {
   if (geo && data) { compute(); renderLayer(); renderSheet(); } else analyse();
 }
 export const refreshRoute = () => { if (map && getRoute() && !drawing && !busy) analyse(); };
+/** Torna a pintar la fitxa (p. ex. quan arriben els serveis o les desembocadures). */
+export const redrawSheet = () => renderSheet();
 
 // ---------- Avisos de temps (també els fa servir app.js) ----------
 export const RADAR_LINKS = '<span class="wx-radar">Radar: <a href="https://www.meteo.cat/observacions/radar" target="_blank" rel="noopener">Meteocat</a> · <a href="https://www.aemet.es/ca/eltiempo/observacion/radar" target="_blank" rel="noopener">AEMET</a></span>';
@@ -301,10 +306,9 @@ const shift = (lat, lon, deg, mt) => {
  * Posició de cada mostra al mapa: l'anada on és; la tornada desplaçada perpendicularment al sentit de nedada, cap al
  * costat on s'obre el mar. El costat només canvia si l'altre és clarament més mar (així la línia no fa ziga-zagues).
  */
-function drawPositions(S) {
+function drawPositions(S, off = returnOffset(S[0]?.lat ?? 42)) {
   const pos = new Map();
   const sea = new Map(); // cap on queda el mar, perpendicular al sentit de nedada (per als números dels trams)
-  const off = returnOffset(S[0]?.lat ?? 42);
   let side = null, leg = null;
   for (const s of S) {
     if (s.leg !== leg) { leg = s.leg; side = null; }
@@ -521,25 +525,134 @@ function chartHtml(R) {
     <span><i style="background:#3ccf7a;border-radius:2px;width:4px"></i>Sortides · <b style="color:#ffb26b">taronja</b>: tram més llarg sense sortida</span></div>`;
 }
 
+/** Textos d'un tram (els fa servir la llista de la fitxa i el PDF). Sense HTML. */
+function tramInfo(g) {
+  const w = g.worst, h = w.h, k = w.a.sea?.kind, dom = w.a.sea?.comps?.[0];
+  const mid = g.mid;
+  // El nom només si la sortida més propera és aquesta (i no el punt d'on heu sortit o l'arribada).
+  const named = mid.exit && Math.abs(mid.exitDist - Math.abs(mid.exit.along - (geo?.pos[mid.pos]?.d ?? 0))) < 5 ? `: ${exitName(mid.exit)}` : '';
+  return {
+    n: g.n, leg: g.leg, t: g.from.t, score: w.a.score, level: w.a.level, effort: g.effort, place: placeName(mid),
+    sea: `${m1(g.hs)} m${dom ? ` del ${windName(dom.dir)}` : ''}${k && k !== 'plana' ? ` · ${SEA_KINDS[k].label.split(' ')[0].toLowerCase()}` : ''}`,
+    sector: w.sector || 'mar obert',
+    wind: h.wind == null ? '' : `vent ${Math.round(h.wind)} km/h ${WREL[w.windRel] ?? ''}`.trim(),
+    cur: Math.abs(g.cur) >= 0.05 ? `corrent ${signed1(g.cur)} km/h` : '',
+    flags: [g.cape ? 'punta exposada' : '', g.land ? 'passa per terra?' : ''].filter(Boolean).join(' · '),
+    exit: mid.exitDist == null || !isFinite(mid.exitDist) ? '' : mid.exitDist < 120 ? `sortida aquí${named}` : `sortida a ${fmtDist(mid.exitDist)}${named}`,
+    exitFar: mid.exitDist > 1000,
+  };
+}
+
 function tramsHtml(R) {
   return `<ul class="r-trams">${R.trams.map((g, i) => {
-    const w = g.worst, h = w.h, k = w.a.sea?.kind, dom = w.a.sea?.comps?.[0];
-    const sea = `${m1(g.hs)} m${dom ? ` del ${windName(dom.dir)}` : ''}${k && k !== 'plana' ? ` · ${SEA_KINDS[k].label.split(' ')[0].toLowerCase()}` : ''}`;
-    const wind = h.wind == null ? '' : `vent ${Math.round(h.wind)} km/h ${WREL[w.windRel] ?? ''}`;
-    const cur = Math.abs(g.cur) >= 0.05 ? ` · corrent ${signed1(g.cur)} km/h` : '';
-    const flags = [g.cape ? 'punta exposada' : '', g.land ? 'passa per terra?' : ''].filter(Boolean).join(' · ');
-    const mid = g.mid;
-    // El nom només si la sortida més propera és aquesta (i no el punt d'on heu sortit o l'arribada).
-    const named = mid.exit && Math.abs(mid.exitDist - Math.abs(mid.exit.along - (geo?.pos[mid.pos]?.d ?? 0))) < 5 ? `: ${esc(exitName(mid.exit))}` : '';
-    const exit = mid.exitDist == null || !isFinite(mid.exitDist) ? '' : mid.exitDist < 120 ? `sortida aquí${named}` : `sortida a ${fmtDist(mid.exitDist)}${named}`;
+    const T = tramInfo(g);
     return `<li data-tram="${i}">
       <span class="r-n ${g.leg}" title="Tram ${g.n}">${g.n}</span>
-      <span class="r-t">${hhmm(g.from.t)}${g.leg === 'tornada' ? '<small>tornada</small>' : ''}</span>
-      <b class="r-sc" style="background:${LEVELS[w.a.level].color}">${m1(w.a.score)}</b>
-      <span class="r-what"><b>${esc(placeName(g.mid))}</b><small>${sea} · ${w.sector || 'mar obert'}</small><small>${wind}${cur}${flags ? ` · <em>${flags}</em>` : ''}</small>${exit ? `<small class="${mid.exitDist > 1000 ? 'r-far' : 'r-exit'}">${exit}</small>` : ''}</span>
+      <span class="r-t">${hhmm(T.t)}${g.leg === 'tornada' ? '<small>tornada</small>' : ''}</span>
+      <b class="r-sc" style="background:${LEVELS[T.level].color}">${m1(T.score)}</b>
+      <span class="r-what"><b>${esc(T.place)}</b><small>${T.sea} · ${T.sector}</small><small>${T.wind}${T.cur ? ` · ${T.cur}` : ''}${T.flags ? ` · <em>${T.flags}</em>` : ''}</small>${T.exit ? `<small class="${T.exitFar ? 'r-far' : 'r-exit'}">${esc(T.exit)}</small>` : ''}</span>
       <span class="ef ${g.effort}">${EFF[g.effort]}</span>
     </li>`;
   }).join('')}</ul>`;
+}
+
+/** Els avisos del temps de la ruta més el de les desembocadures (si ha plogut i en passeu a prop). */
+function routeAlertsAll(R) {
+  const s0 = R.samples[0];
+  const r = riverAlert(R.samples.map((s) => [s.lat, s.lon]), rainBefore(cachedMarine(), s0.lat, s0.lon, R.start), R.start);
+  return r ? [...R.alerts, r] : R.alerts;
+}
+
+/** Què hi ha al punt de sortida (i a l'arribada, si no torneu al mateix lloc): bars, dutxes, fonts, pàrquing… */
+const SERVICES_R = 300;
+function servicesBlock(R, loop) {
+  const a = R.samples[0], z = R.samples.at(-1);
+  const parts = [['Al punt de sortida', servicesHtml(a.lat, a.lon, SERVICES_R)]];
+  if (!R.back && !loop) parts.push(["A l'arribada", servicesHtml(z.lat, z.lon, SERVICES_R)]);
+  const got = parts.filter(([, h]) => h);
+  if (!got.length) return '';
+  return got.map(([t, h]) => `<div class="d-h">${t}</div>${h}`).join('') + `<p class="d-note">Serveis d'OpenStreetMap a menys de ${SERVICES_R} m (poden ser de temporada).</p>`;
+}
+
+// ---------- PDF ----------
+// La ruta en un PDF A4 (js/routepdf.js, que es carrega només quan cal). A l'ordinador es descarrega sol; al mòbil
+// surt el botó de compartir (el navegador demana un toc de l'usuari per obrir el menú de compartir).
+let pdf = null; // { for: result, busy, err, act }
+const coarse = () => matchMedia('(pointer: coarse)').matches;
+const stripHtml = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' ').trim(); };
+const PDF_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg>';
+
+function pdfHtml(R) {
+  const st = pdf?.for === R ? pdf : null;
+  let extra = '';
+  if (st?.busy) extra = '<p class="r-pdf-st">Preparant el PDF: mapa, perfil i trams…</p>';
+  else if (st?.err) extra = `<p class="r-pdf-st err">No s'ha pogut fer el PDF: ${esc(st.err)}</p>`;
+  else if (st?.act) {
+    extra = `<div class="r-pdf-ok"><span>PDF a punt: <b>${esc(st.act.name)}</b></span>
+      ${st.act.canShare && coarse() ? '<button data-pdf-share>Comparteix</button>' : ''}<button data-pdf-save>Desa</button><a href="${st.act.url}" target="_blank" rel="noopener">Obre</a></div>`;
+  }
+  return `<button class="r-pdf" data-pdf ${st?.busy ? 'disabled' : ''}>${PDF_ICO}Desa la ruta en PDF (A4)</button>${extra}`;
+}
+
+/** Tot el que surt al PDF, amb els mateixos textos que la fitxa. */
+function pdfInfo(r, R) {
+  const S = R.samples, loop = isLoop(r.pts);
+  const first = S[0], turn = R.back ? S.find((x, i) => S[i + 1]?.leg === 'tornada') : S.at(-1);
+  const A = placeName(first), B = turn ? placeName(turn) : null;
+  const named = (x) => x && !/^km /.test(x);
+  let title = 'Ruta de nedada';
+  if (loop) { if (named(A)) title = `Circuit des de ${A}`; }
+  else if (R.back) { if (named(A) && named(B) && A !== B) title = `De ${A} a ${B} i tornada`; else if (named(A)) title = `Des de ${A}, anada i tornada`; }
+  else if (named(A) && named(B)) title = `De ${A} a ${B}`;
+  const day = fmt({ weekday: 'long', day: 'numeric', month: 'long' }).format(R.start * 1000);
+  const pace = r.pace ?? DEFAULT_PACE;
+  const wl = LEVELS[R.worst.a.level];
+  const a = S[0], z = S.at(-1);
+  const services = [{ title: 'Al punt de sortida', lines: servicesLines(a.lat, a.lon, SERVICES_R) }];
+  if (!R.back && !loop) services.push({ title: "A l'arribada", lines: servicesLines(z.lat, z.lon, SERVICES_R) });
+  const got = data?.fetchedAt ? data.fetchedAt / 1000 : Date.now() / 1000;
+  return {
+    R, title,
+    when: `${day[0].toUpperCase()}${day.slice(1)} · sortida a les ${hhmm(R.start)}`,
+    meta: `${fmtDist(R.length)} · ${loop ? 'circuit' : R.back ? 'anada i tornada' : 'només anada'} · ritme ${paceTxt(pace)} /100 m (${nf1.format(360 / pace)} km/h) · ${R.trams.length} trams`,
+    kpis: [
+      { v: fmtDur(R.duration), l: 'durada' },
+      { v: hhmm(R.end), l: R.back || loop ? 'tornada' : 'arribada' },
+      { v: m1(R.worst.a.score), l: `pitjor tram · ${wl.short.toLowerCase()}`, color: wl.color },
+      { v: m1(R.mean), l: 'nota mitjana' },
+      { v: R.gap ? fmtDist(R.gap.len) : '—', l: 'sense sortida', warn: R.gap?.len >= 1500 },
+    ],
+    summary: stripHtml(summaryHtml(R)),
+    rec: rec ? stripHtml(recHtml(r).replace(/<button[\s\S]*?<\/button>/, '')) : null,
+    alerts: routeAlertsAll(R),
+    trams: R.trams.map(tramInfo),
+    services,
+    positions: (off) => drawPositions(S, off),
+    notes: [
+      "Nota de 0 a 10: combina l'onada que arriba a cada punt (d'on ve, com d'alta és, el període i com d'arrecerat el deixa la costa) amb el vent i les ratxes. Més de 7 = bo · de 4 a 7 = mogut · 4 o menys = mala mar.",
+      "Cada 250 m es mira per on hi pot arribar l'onada segons la línia de costa real (caps, cales i illes) i quin temps farà a l'hora que hi passareu, amb el ritme triat. El corrent és una estimació: la meitat del que dona el model mar endins més un 2 % del vent. La marea, de pocs centímetres, no es té en compte.",
+      `Previsió d'Open-Meteo (onades: Météo-France; vent: AROME) descarregada el ${fmt({ day: 'numeric', month: 'numeric' }).format(got * 1000)} a les ${hhmm(got)}. Sortides d'emergència i serveis d'OpenStreetMap.`,
+      "És una previsió: mireu el mar abans d'entrar-hi, no nedeu sols, porteu boia i, si el mar canvia, sortiu per la sortida més propera.",
+    ],
+  };
+}
+
+async function exportPdf() {
+  const r = getRoute(), R = result;
+  if (!r || !R || (pdf?.busy && pdf.for === R)) return;
+  pdf = { for: R, busy: true };
+  renderSheet();
+  try {
+    const { makeRoutePdf, pdfActions } = await import('./routepdf.js');
+    const { blob } = await makeRoutePdf(pdfInfo(r, R));
+    if (pdf?.act) URL.revokeObjectURL(pdf.act.url);
+    const act = pdfActions(blob, `nedada-${localParts(R.start).day}-${hhmm(R.start).replace(':', '')}.pdf`);
+    pdf = { for: R, act };
+    if (!coarse()) act.download();
+  } catch (e) {
+    pdf = { for: R, err: e.message };
+  }
+  renderSheet();
 }
 
 function renderSheet() {
@@ -560,7 +673,7 @@ function renderSheet() {
   if (!R) body += `<p class="d-note">${busy ? 'Calculant la ruta: costa, onades, vent i corrents…' : ''}</p>`;
   else {
     const wl = LEVELS[R.worst.a.level];
-    body += recHtml(r) + alertsHtml(R.alerts) + `
+    body += recHtml(r) + alertsHtml(routeAlertsAll(R)) + `
       <div class="r-kpis">
         <div><b>${fmtDur(R.duration)}</b><span>durada</span></div>
         <div><b>${hhmm(R.end)}</b><span>${R.back || loop ? 'tornada' : 'arribada'}</span></div>
@@ -573,6 +686,8 @@ function renderSheet() {
       <div class="r-chart">${chartHtml(R)}</div>
       <div class="d-h">Trams <button class="info-btn" data-help="rutes" aria-label="Com es calcula">i</button></div>
       ${tramsHtml(R)}
+      ${servicesBlock(R, loop)}
+      ${pdfHtml(R)}
       <p class="d-note">Cada 250 m es mira per on hi pot arribar l'onada segons la línia de costa real (caps, cales i illes) i quin temps farà a l'hora que hi passareu. El corrent és una estimació: la meitat del que dona el model mar endins (cel·les de ~8 km) més un 2 % del vent. A la Costa Brava la marea és de pocs centímetres i no es té en compte. Dades de les ${hhmm(data.fetchedAt / 1000)}${busy ? ' · actualitzant…' : ''}.</p>`;
   }
   $('rBody').innerHTML = body;
@@ -601,6 +716,9 @@ function onBodyClick(e) {
   if (bk) { r.back = bk.dataset.back === '1'; r.reverse = false; saveRoute(r); return recompute(); }
   const rv = e.target.closest('[data-rev]');
   if (rv) { r.reverse = rv.dataset.rev === '1'; saveRoute(r); return recompute(); }
+  if (e.target.closest('[data-pdf]')) return exportPdf();
+  if (e.target.closest('[data-pdf-share]')) return pdf?.act?.share().catch(() => {});
+  if (e.target.closest('[data-pdf-save]')) return pdf?.act?.download();
   if (e.target.closest('[data-apply]') && rec) { r.start = rec.start; r.reverse = rec.reverse; saveRoute(r); return recompute(); }
   const tr = e.target.closest('[data-tram]');
   if (tr && result) {

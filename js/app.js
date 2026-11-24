@@ -1,11 +1,12 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore } from './marine.js';
 import * as store from './store.js';
 import { initLayers, setLayersTime } from './layers.js';
 import { initMapPanel, showKind } from './mappanel.js';
-import { initPlaces } from './places.js';
+import { initPlaces, loadPlaces, riverAlert } from './places.js';
+import { initServices, loadServices, servicesHtml } from './services.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib, OTHER_BUOYS, fetchOthers, cachedOthers } from './buoy.js';
-import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute, alertsHtml, startRouteAt, addPointAt, hasRoute } from './routeui.js';
+import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute, redrawSheet, alertsHtml, startRouteAt, addPointAt, hasRoute } from './routeui.js';
 
 const $ = (id) => document.getElementById(id);
 const nf1 = new Intl.NumberFormat('ca', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -114,12 +115,19 @@ function renderTime() {
 // ---------- Avisos de temps ----------
 // Una nedada dura unes 2 hores: es miren els avisos de l'hora triada fins a 2 h després (més el marge de weatherAlerts).
 const SWIM_LEN = 2 * 3600;
+/** Avisos d'una platja o punt a l'hora `t`: els del temps i, si ha plogut, el de la desembocadura més propera. */
+function beachAlerts(b, hours, t) {
+  const out = weatherAlerts(hours, t, t + SWIM_LEN);
+  const r = riverAlert([[b.lat, b.lon]], rainBefore(data, b.lat, b.lon, t), t);
+  if (r) out.push(r);
+  return out;
+}
 /** Avisos de tota la costa a l'hora triada: si només afecten unes quantes platges, es diu on. */
 function renderAlerts() {
   const t = data.times[idx];
   const byKind = new Map();
   for (const b of BEACHES) {
-    for (const a of weatherAlerts(data.beaches[b.id], t, t + SWIM_LEN)) {
+    for (const a of beachAlerts(b, data.beaches[b.id], t)) {
       const k = byKind.get(a.kind);
       if (!k) byKind.set(a.kind, { ...a, beaches: [b.short ?? b.name] });
       else {
@@ -128,6 +136,9 @@ function renderAlerts() {
       }
     }
   }
+  // L'avís de les desembocadures diu quin riu a cada platja: per a tota la costa, un text general.
+  const riv = byKind.get('riera');
+  if (riv?.beaches.length > 1) riv.text = `Ha plogut força les últimes 48 hores: prop de les desembocadures de rius i rieres l'aigua pot estar tèrbola i bruta durant un o dos dies.`;
   const list = [...byKind.values()].sort((a, b) => (a.level === 'perill' ? 0 : 1) - (b.level === 'perill' ? 0 : 1) || a.t - b.t);
   list.forEach((a) => { if (a.beaches.length < BEACHES.length * 0.6) a.where = `(${a.beaches.slice(0, 3).join(', ')}${a.beaches.length > 3 ? '…' : ''})`; });
   $('alerts').hidden = !list.length;
@@ -179,7 +190,10 @@ function initMap() {
   // què es veu: capes, platges, punts, boies, sortides, ports, coves, fars i la ruta.
   initLayers(map, { time: () => data.times[idx] });
   initPlaces(map);
+  initServices(map);
   initMapPanel(map, { buoyIco: BUOY_ICO });
+  // Desembocadures (avís després de pluja) i serveis (fitxa de la platja): en arribar, es tornen a pintar els avisos.
+  Promise.allSettled([loadPlaces(), loadServices()]).then(() => { if (data) renderAlerts(); if (selected) renderDetail(); redrawSheet(); });
   // Temperatura de l'aigua de tota la costa, al racó de dalt a l'esquerra (és terra: no tapa cap etiqueta), per sobre
   // dels botons: així el menú de capes, que s'obre a la dreta del seu botó, no queda tapat.
   const Sst = L.Control.extend({
@@ -815,6 +829,9 @@ function sentence(b, h, a) {
   return parts.join(', ') + '.';
 }
 
+// Fins on es busquen els serveis d'una platja (bars, dutxes, fonts, lavabos, pàrquing, socorrista).
+const SERVICES_R = 400;
+
 function renderDetail() {
   const b = getBeach(selected);
   if (!b || !data) return;
@@ -837,7 +854,8 @@ function renderDetail() {
     return;
   }
   const a = analyze(b, h);
-  const alerts = weatherAlerts(hours, h.t, h.t + SWIM_LEN);
+  const alerts = beachAlerts(b, hours, h.t);
+  const svc = servicesHtml(b.lat, b.lon, SERVICES_R);
 
   const wins = [0, 1].map((off) => {
     const w = bestWindow(b, hours, dayKeyOffset(off));
@@ -873,6 +891,7 @@ function renderDetail() {
     </div>
     ${seaBlock(b, h, a)}
     <div class="d-windows">${wins}</div>
+    ${svc ? `<div class="d-h">${b.custom ? 'A prop' : 'A la platja'}</div>${svc}<p class="d-note">Serveis d'OpenStreetMap a menys de ${SERVICES_R} m: pot ser que n'hi falti algun o que siguin de temporada.</p>` : ''}
     ${modelsBlock(b, h)}
     <div class="d-h">Pròximes 48 hores</div>
     <div class="d-chart" id="dChart">${chart(b, hours)}</div>
