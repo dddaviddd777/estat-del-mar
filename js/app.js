@@ -1,5 +1,5 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore } from './marine.js';
 import * as store from './store.js';
 import { initLayers, setLayersTime } from './layers.js';
 import { initMapPanel, showKind } from './mappanel.js';
@@ -426,6 +426,7 @@ function renderSst() {
       <b>${nf1.format(s.avg)}<small>°C</small></b>
     </div>
     <span class="sst-word">Aigua ${sstWord(s.avg)}</span>
+    ${wetsuitAdvice(s.avg) ? `<span class="sst-neo">${wetsuitAdvice(s.avg).short}</span>` : ''}
     <i class="sst-bar" style="background:${sstGradient()}"><em style="left:${pos(s.avg)}%"></em></i>
     <span class="sst-range">${same ? 'Igual a tota la costa' : `Mín. ${nf1.format(s.min.t)} ${s.min.b.short}<br>Màx. ${nf1.format(s.max.t)} ${s.max.b.short}`}</span>`;
   el.title = `Temperatura de l'aigua (mitjana de les platges) ${dayLabel(data.times[idx]).toLowerCase()} a les ${hhmm(data.times[idx])}`;
@@ -899,7 +900,7 @@ function renderDetail() {
     ...(h.s2 >= 0.05 ? [['2n mar de fons', `${m(h.s2)} m del ${windName(h.s2Dir)}${h.s2Per ? `, ${nf1.format(h.s2Per)} s` : ''}`]] : []),
     ['Mar de vent', h.ww == null ? '—' : `${m(h.ww)} m del ${windName(h.wwDir)}${(h.wwTp ?? h.wwPer) ? `, ${nf1.format(Math.max(h.wwTp ?? 0, h.wwPer ?? 0))} s` : ''}`],
     ['Vent', h.wind == null ? '—' : `${Math.round(h.wind)} km/h del ${windName(h.windDir)} (${REL[a.rel]}) · ratxes ${Math.round(h.gust ?? 0)}`],
-    ['Aigua', h.sst == null ? '—' : `<i class="sst-dot" style="background:${sstColor(h.sst)}"></i>${nf1.format(h.sst)} °C, ${sstWord(h.sst)}`],
+    ['Aigua', h.sst == null ? '—' : `<i class="sst-dot" style="background:${sstColor(h.sst)}"></i>${nf1.format(h.sst)} °C, ${sstWord(h.sst)}${wetsuitAdvice(h.sst) ? ` · <b class="neo">${wetsuitAdvice(h.sst).short.toLowerCase()}</b>` : ''}`],
     ['Aire', h.air == null ? '—' : `${Math.round(h.air)} °C`],
   ];
   const br = buoy?.reading;

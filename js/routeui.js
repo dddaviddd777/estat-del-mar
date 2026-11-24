@@ -1,6 +1,6 @@
 // Pantalla de les rutes de nedada: dibuixar-la (com al MapTrack: creu al centre, "+ Punt", "Desfer"),
 // pintar-la al mapa per trams amb el color del semàfor i la fitxa "La teva nedada".
-import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS, cachedMarine, rainBefore, nearBeach } from './marine.js';
+import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS, cachedMarine, rainBefore, nearBeach, wetsuitAdvice } from './marine.js';
 import { riverAlert, placesNear, CAVE_ICO, RIVER_ICO, RIVER_RAIN } from './places.js';
 import { servicesHtml, servicesLines } from './services.js';
 import { loadExits, exitsIn, exitName, EXIT_TYPES } from './exits.js';
@@ -475,6 +475,10 @@ function summaryHtml(R) {
   const off = R.samples.find((s) => s.a.rel === 'terra' && (s.h.wind ?? 0) >= 20);
   if (off) p.push(`<span class="r-warn-t">Vent de terra de ${Math.round(off.h.wind)} km/h a ${esc(placeName(off))}: us allunya de la costa.</span>`);
   p.push(exitsSentence(R));
+  // Neoprè: amb l'aigua més freda de la ruta i el que dura la nedada.
+  const sst = Math.min(...R.samples.map((s) => s.h.sst ?? Infinity));
+  const neo = isFinite(sst) ? wetsuitAdvice(sst, R.duration / 60) : null;
+  if (neo) p.push(`<span class="r-neo">${neo.text}</span>`);
   return `<p class="r-sum">${p.join(' ')}</p>`;
 }
 

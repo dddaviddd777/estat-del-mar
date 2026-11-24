@@ -464,6 +464,20 @@ export function sstWord(t) {
   return t < 14 ? 'molt freda' : t < 17 ? 'freda' : t < 20 ? 'fresca' : t < 23 ? 'agradable' : 'càlida';
 }
 
+/**
+ * Neoprè segons la temperatura de l'aigua (°C) i quanta estona hi estareu (minuts). Per sota de 15 °C, porteu-ne;
+ * de 15 a 18, recomanat; de 18 a 20, només si la nedada passa d'una hora i mitja. null si no cal.
+ * { need: 'si' | 'recomanat' | 'llarga', short, text }
+ */
+export function wetsuitAdvice(t, min = 60) {
+  if (t == null) return null;
+  const deg = `${String(Math.round(t * 10) / 10).replace('.', ',')} °C`;
+  if (t < 15) return { need: 'si', short: 'Porteu neoprè', text: `Aigua freda (${deg}): porteu neoprè${t < 13 ? ', casquet, escarpins i guants' : ' i, millor, casquet'}.` };
+  if (t < 18) return { need: 'recomanat', short: 'Neoprè recomanat', text: `Aigua fresca (${deg}): neoprè recomanat${min > 60 ? ', sobretot per una nedada tan llarga' : ''}.` };
+  if (t < 20 && min > 90) return { need: 'llarga', short: 'Neoprè, si nedeu molt', text: `Aigua a ${deg}: per una nedada de més d'una hora i mitja, el neoprè us anirà bé.` };
+  return null;
+}
+
 /** Temperatura de l'aigua a tota la costa en una hora: mitjana, i la platja més freda i la més calenta. */
 export function sstStats(data, k) {
   const v = BEACHES.map((b) => ({ b, t: data.beaches[b.id][k]?.sst })).filter((x) => x.t != null);

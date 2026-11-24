@@ -40,19 +40,24 @@ const PRESETS = {
 };
 
 let map = null, ui = null, show = { ...DEFAULT };
-// Fons del mapa: OSM o satèl·lit (Esri World Imagery, gratuït amb atribució, amb els noms dels pobles a sobre). La foto
-// ajuda on la platja és poc fonda i al mapa no es distingeix bé la sorra de l'aigua.
+// Fons del mapa: OSM o satèl·lit amb noms (ortofoto de l'ICGC). La foto ajuda on la platja és poc fonda i al mapa no es
+// distingeix bé la sorra de l'aigua.
 let base = 'mapa', osm = null, sat = null;
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const ICGC = 'https://geoserveis.icgc.cat/servei/catalunya/mapa-base/wmts';
 function setBase(v) {
   base = v === 'sat' ? 'sat' : 'mapa';
   if (base === 'sat') {
+    // L'ortofoto híbrida de l'ICGC (com al Track-Map): la foto aèria amb els noms de pobles, platges, cales, caps i
+    // puntes. Només cobreix Catalunya: a sota, la foto d'Esri, per si es mira més enllà.
     sat ??= L.layerGroup([
-      L.tileLayer(`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 17, maxNativeZoom: 18, attribution: 'Satèl·lit © Esri, Maxar, Earthstar Geographics' }),
-      L.tileLayer(`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 17, opacity: 0.85 }),
+      L.tileLayer(`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 17, maxNativeZoom: 18 }),
+      L.tileLayer(`${ICGC}/orto-hibrida/MON3857NW/{z}/{x}/{y}.png`, { maxZoom: 17, maxNativeZoom: 19,
+        attribution: 'Ortofoto © <a href="https://www.icgc.cat" target="_blank" rel="noopener">ICGC</a> CC BY 4.0 · Esri' }),
     ]);
     if (osm && map.hasLayer(osm)) map.removeLayer(osm);
-    if (!map.hasLayer(sat)) { sat.addTo(map); sat.eachLayer((l) => l.bringToBack()); }
+    // Al fons de tot, primer l'ICGC i després Esri: així Esri queda a sota i els noms de l'ICGC es veuen.
+    if (!map.hasLayer(sat)) { sat.addTo(map); sat.getLayers().reverse().forEach((l) => l.bringToBack()); }
   } else {
     if (sat && map.hasLayer(sat)) map.removeLayer(sat);
     if (osm && !map.hasLayer(osm)) { osm.addTo(map); osm.bringToBack(); }
