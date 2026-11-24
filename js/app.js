@@ -242,7 +242,58 @@ function initMap() {
   map.on('click', () => { if (Date.now() - lastPick > 600) closeCtxMenu(); });
   map.on('movestart zoomstart', closeCtxMenu);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtxMenu(); });
+  initMaximize();
   restorePts();
+}
+
+/**
+ * Mapa a tota la pantalla (botó de dalt a la dreta). El mapa i la barra de temps ocupen tota la finestra
+ * (`body.map-max`) i, si el navegador ho permet, també es demana la pantalla completa (a l'iPhone no es pot:
+ * llavors ocupa tota la finestra del Safari). Les fitxes s'obren per sobre. Es surt amb el mateix botó, amb Esc
+ * o amb el gest d'enrere que tanca la pantalla completa.
+ */
+const MAX_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+const MIN_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+function initMaximize() {
+  let btn;
+  const isMax = () => document.body.classList.contains('map-max');
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const paint = (on) => {
+    btn.innerHTML = on ? MIN_ICO : MAX_ICO;
+    btn.title = on ? 'Surt de la pantalla completa' : 'Mapa a tota la pantalla';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-pressed', String(on));
+  };
+  function setMax(on) {
+    document.body.classList.toggle('map-max', on);
+    paint(on);
+    closeCtxMenu();
+    const de = document.documentElement;
+    try {
+      if (on && !fsEl()) (de.requestFullscreen || de.webkitRequestFullscreen)?.call(de)?.catch?.(() => {});
+      if (!on && fsEl()) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document)?.catch?.(() => {});
+    } catch { /* sense pantalla completa: el mapa ocupa igualment tota la finestra */ }
+  }
+  const Ctl = L.Control.extend({
+    onAdd() {
+      const el = L.DomUtil.create('div', 'leaflet-bar max-ctl');
+      el.innerHTML = '<a href="#" role="button"></a>';
+      btn = el.firstChild;
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.on(btn, 'click', (e) => { L.DomEvent.preventDefault(e); setMax(!isMax()); });
+      return el;
+    },
+  });
+  new Ctl({ position: 'topright' }).addTo(map);
+  paint(false);
+  // Si l'usuari surt de la pantalla completa pel seu compte (Esc, gest d'enrere), el mapa torna al seu lloc.
+  const onFs = () => { if (!fsEl() && isMax()) setMax(false); };
+  document.addEventListener('fullscreenchange', onFs);
+  document.addEventListener('webkitfullscreenchange', onFs);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isMax() && !ctxEl && document.querySelector('.layers-panel')?.hidden !== false
+      && [...document.querySelectorAll('.sheet')].every((s) => s.hidden)) setMax(false);
+  }, true); // abans que els altres Esc: si hi ha una fitxa oberta, el primer Esc només tanca la fitxa
 }
 
 /** Menú del clic dret (o de mantenir premut al mòbil). */

@@ -503,3 +503,16 @@ body.sat .leaflet-container { background: #1d2b36; }
 .sst-neo { display: inline-block; margin: 0 0 4px; padding: 1px 5px; border-radius: 6px; background: #2f6fb3; color: #fff; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
 .d-facts .neo, b.neo { color: #9fd0ff; font-weight: 700; }
 .r-neo { color: #9fd0ff; font-weight: 600; }
+
+/* ---------- Mapa a tota la pantalla (botó de dalt a la dreta del mapa) ----------
+   El mapa i la barra de temps ocupen tota la finestra; les fitxes (z-index 10) i el manual s'obren per sobre. */
+.max-ctl a { display: grid; place-items: center; color: #0b1d2c; }
+.max-ctl a:hover { color: #1a73e8; }
+body.map-max { overflow: hidden; }
+body.map-max .map-card { position: fixed; inset: 0; z-index: 9; margin: 0; max-width: none; border: 0; border-radius: 0;
+  display: flex; flex-direction: column; background: #163a5a; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+body.map-max #map { flex: 1; height: auto; min-height: 0; }
+body.map-max .map-card .legend { display: none; }
+body.map-max .timebar { padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
+/* A tota la pantalla, l'avís es queda en la línia important (sense la nota del radar) perquè el mapa tingui més lloc. */
+body.map-max .wx-box > p { display: none; }
