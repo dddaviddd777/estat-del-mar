@@ -469,12 +469,14 @@ export function sstWord(t) {
  * de 15 a 18, recomanat; de 18 a 20, només si la nedada passa d'una hora i mitja. null si no cal.
  * { need: 'si' | 'recomanat' | 'llarga', short, text }
  */
+/** Per sota d'aquesta temperatura de l'aigua (°C) sempre es recomana el neoprè (l'usuari, 24/11/2026). */
+export const NEO_MAX = 22.5;
 export function wetsuitAdvice(t, min = 60) {
   if (t == null) return null;
   const deg = `${String(Math.round(t * 10) / 10).replace('.', ',')} °C`;
   if (t < 15) return { need: 'si', short: 'Porteu neoprè', text: `Aigua freda (${deg}): porteu neoprè${t < 13 ? ', casquet, escarpins i guants' : ' i, millor, casquet'}.` };
   if (t < 18) return { need: 'recomanat', short: 'Neoprè recomanat', text: `Aigua fresca (${deg}): neoprè recomanat${min > 60 ? ', sobretot per una nedada tan llarga' : ''}.` };
-  if (t < 20 && min > 90) return { need: 'llarga', short: 'Neoprè, si nedeu molt', text: `Aigua a ${deg}: per una nedada de més d'una hora i mitja, el neoprè us anirà bé.` };
+  if (t < NEO_MAX) return { need: 'aconsellable', short: 'Neoprè aconsellable', text: `Aigua a ${deg}: el neoprè us anirà bé${min > 60 ? ', sobretot per una nedada de més d\'una hora' : ''}.` };
   return null;
 }
 
