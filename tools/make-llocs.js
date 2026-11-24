@@ -26,6 +26,10 @@ const NEAR = { cova: 60, far: 300, riu: 80 };
     }
     const type = t.natural === 'cave_entrance' ? 'cova' : t.man_made === 'lighthouse' ? 'far' : null;
     if (!type) continue;
+    // A OSM, els llums d'entrada dels ports (dics i escullera) també són man_made=lighthouse, però no tenen nom ni són
+    // edificis i s'hi veuen a 3-5 milles: a Palamós en sortien set. Els fars de veritat tenen nom (Far de Palamós, de
+    // Tossa, Sant Sebastià…) o, com el de Roses, són un edifici i s'hi veuen de lluny.
+    if (type === 'far' && !t.name && t.building !== 'yes' && !(Number(t['seamark:light:range']) >= 10)) continue;
     let lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon;
     if (lat == null && e.geometry?.length) { lat = e.geometry[0].lat; lon = e.geometry[0].lon; }
     if (lat == null && e.bounds) { lat = (e.bounds.minlat + e.bounds.maxlat) / 2; lon = (e.bounds.minlon + e.bounds.maxlon) / 2; }

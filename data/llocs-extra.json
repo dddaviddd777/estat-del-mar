@@ -1,5 +1,5 @@
 {
-  "nota": "Correccions a mà de les coves i els fars d'OSM. add: [lat, lon, tipus (cova o far), nom]. remove: [lat, lon] (treu el que hi hagi a menys de 40 m).",
-  "add": [],
-  "remove": []
+  "nota": "Correccions a mà de les coves, els fars i les desembocadures d'OSM. add: [lat, lon, tipus (cova, far o riu), nom]. remove: [lat, lon] (treu el que hi hagi a menys de 40 m). El far de Roses no té nom a OSM: es treu i es torna a posar amb nom.",
+  "add": [[42.24577, 3.18315, "far", "Far de Roses"]],
+  "remove": [[42.24577, 3.18315]]
 }
