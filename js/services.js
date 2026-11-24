@@ -49,26 +49,47 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 function parkingNote(f) {
   return [f & 1 ? 'de pagament' : null, f & 2 ? 'amb places adaptades' : null].filter(Boolean).join(' · ');
 }
+// Enllaços a Google Maps: un bar, per veure'l (horari, fotos, ressenyes); un pàrquing, per anar-hi en cotxe.
+export const placeUrl = (p) => (p.name
+  ? `https://www.google.com/maps/search/${encodeURIComponent(p.name)}/@${p.lat},${p.lon},18z`
+  : `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`);
+export const directionsUrl = (p) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=driving`;
+const GM_ICO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
+const link = (href, text) => `<a class="gm-link" href="${href}" target="_blank" rel="noopener">${text}</a>`;
+/** Contingut del globus en tocar un bar o un pàrquing del mapa. */
+function popupHtml(p) {
+  const a = p.type === 'parking' ? link(directionsUrl(p), `${GM_ICO}Com arribar-hi (Google Maps)`) : link(placeUrl(p), `${GM_ICO}Obre a Google Maps`);
+  return `<div class="svc-pop">${tip(p)}${a}</div>`;
+}
+
 function tip(p) {
   const T = SERVICE_TYPES[p.type];
   const title = p.name ?? T.one[0].toUpperCase() + T.one.slice(1);
-  const sub = p.type === 'parking' ? ['Pàrquing', parkingNote(p.flags)].filter(Boolean).join(' · ') : p.name ? T.one[0].toUpperCase() + T.one.slice(1) : '';
+  const sub = p.type === 'parking' ? [p.name ? 'Pàrquing' : '', parkingNote(p.flags)].filter(Boolean).join(' · ') : p.name ? T.one[0].toUpperCase() + T.one.slice(1) : '';
   return `<b>${esc(title)}</b>${sub ? `<br><small>${esc(sub)}</small>` : ''}`;
 }
 
+// Els punts que ja hi són es queden (si no, en moure el mapa per ensenyar un globus sencer, el globus desapareixeria).
+const marks = new Map(); // servei → marcador
 function render() {
   if (!map) return;
   const want = SERVICE_KINDS.filter((k) => shown[k]);
-  if (!want.length || map.getZoom() < SERVICE_ZOOM) { layer.clearLayers(); return; }
+  if (!want.length || map.getZoom() < SERVICE_ZOOM) { layer.clearLayers(); marks.clear(); return; }
   loadServices().then(() => {
-    layer.clearLayers();
     const b = map.getBounds().pad(0.1);
+    const keep = new Set();
     for (const p of list) {
       if (!want.includes(p.type) || !b.contains([p.lat, p.lon])) continue;
-      L.marker([p.lat, p.lon], { icon: L.divIcon({ className: `svc-dot ${p.type}`, html: SERVICE_TYPES[p.type].ico, iconSize: [16, 16], iconAnchor: [8, 8] }), keyboard: false, zIndexOffset: -1500 })
+      keep.add(p);
+      if (marks.has(p)) continue;
+      const mk = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: `svc-dot ${p.type}`, html: SERVICE_TYPES[p.type].ico, iconSize: [16, 16], iconAnchor: [8, 8] }), keyboard: false, zIndexOffset: -1500 })
         .bindTooltip(tip(p), { direction: 'top', offset: [0, -8] })
         .addTo(layer);
+      // Bars i pàrquings: en tocar-los, un globus amb l'enllaç a Google Maps.
+      if (p.type === 'bar' || p.type === 'parking') mk.bindPopup(popupHtml(p), { offset: [0, -6], autoPanPadding: [12, 12], className: 'svc-popup' }).on('popupopen', () => mk.closeTooltip());
+      marks.set(p, mk);
     }
+    for (const [p, mk] of marks) if (!keep.has(p) && !mk.isPopupOpen()) { layer.removeLayer(mk); marks.delete(p); }
   }).catch(() => {});
 }
 
@@ -108,14 +129,15 @@ export function servicesLines(lat, lon, r, html = false) {
     const T = SERVICE_TYPES[k];
     let t = g.length === 1 ? `${T.one[0].toUpperCase()}${T.one.slice(1)}` : `${g.length} ${T.many}`;
     if (k === 'bar') {
-      const names = [...new Set(g.map((p) => p.name).filter(Boolean))].slice(0, 3);
-      if (names.length) t += `: ${names.map(q).join(', ')}${g.length > names.length ? '…' : ''}`;
+      const named = [...new Map(g.filter((p) => p.name).map((p) => [p.name, p])).values()].slice(0, 3);
+      if (named.length) t += `: ${named.map((p) => (html ? link(placeUrl(p), esc(p.name)) : p.name)).join(', ')}${g.length > named.length ? '…' : ''}`;
     } else if (k === 'parking') {
       const f = g.reduce((a, p) => a | p.flags, 0), free = g.some((p) => !(p.flags & 1));
       const notes = [f & 1 ? (free ? 'algun de pagament' : 'de pagament') : null, f & 2 ? 'places adaptades' : null].filter(Boolean);
       if (notes.length) t += ` (${notes.join(', ')})`;
     }
     t += ` · a ${Math.max(10, Math.round(g[0].dist / 10) * 10)} m`;
+    if (html && k === 'parking') t += ` · ${link(directionsUrl(g[0]), 'com arribar-hi')}`;
     out.push({ type: k, text: t });
   }
   return out;

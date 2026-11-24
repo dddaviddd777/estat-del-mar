@@ -540,6 +540,10 @@ function tramInfo(g) {
     flags: [g.cape ? 'punta exposada' : '', g.land ? 'passa per terra?' : ''].filter(Boolean).join(' · '),
     exit: mid.exitDist == null || !isFinite(mid.exitDist) ? '' : mid.exitDist < 120 ? `sortida aquí${named}` : `sortida a ${fmtDist(mid.exitDist)}${named}`,
     exitFar: mid.exitDist > 1000,
+    // Xifres soles (per a la taula compacta del PDF)
+    hs: g.hs, seaFrom: dom ? windName(dom.dir) : null, kind: k && k !== 'plana' ? SEA_KINDS[k].label.split(' ')[0].toLowerCase() : null,
+    windKmh: h.wind, windFrom: h.windDir == null ? null : windName(h.windDir), gust: h.gust, windRel: w.windRel,
+    exitM: mid.exitDist == null || !isFinite(mid.exitDist) ? null : mid.exitDist,
   };
 }
 
@@ -620,6 +624,8 @@ function pdfInfo(r, R) {
       { v: hhmm(R.end), l: R.back || loop ? 'tornada' : 'arribada' },
       { v: m1(R.worst.a.score), l: `pitjor tram · ${wl.short.toLowerCase()}`, color: wl.color },
       { v: m1(R.mean), l: 'nota mitjana' },
+      { v: `${m1(Math.max(...S.map((x) => x.a.beachHs ?? 0)))} m`, l: 'onada màxima' },
+      { v: `${Math.round(Math.max(...S.map((x) => x.h.wind ?? 0)))} km/h`, l: `vent màx. · ratxes ${Math.round(Math.max(...S.map((x) => x.h.gust ?? 0)))}` },
       { v: R.gap ? fmtDist(R.gap.len) : '—', l: 'sense sortida', warn: R.gap?.len >= 1500 },
     ],
     summary: stripHtml(summaryHtml(R)),
@@ -628,12 +634,9 @@ function pdfInfo(r, R) {
     trams: R.trams.map(tramInfo),
     services,
     positions: (off) => drawPositions(S, off),
-    notes: [
-      "Nota de 0 a 10: combina l'onada que arriba a cada punt (d'on ve, com d'alta és, el període i com d'arrecerat el deixa la costa) amb el vent i les ratxes. Més de 7 = bo · de 4 a 7 = mogut · 4 o menys = mala mar.",
-      "Cada 250 m es mira per on hi pot arribar l'onada segons la línia de costa real (caps, cales i illes) i quin temps farà a l'hora que hi passareu, amb el ritme triat. El corrent és una estimació: la meitat del que dona el model mar endins més un 2 % del vent. La marea, de pocs centímetres, no es té en compte.",
-      `Previsió d'Open-Meteo (onades: Météo-France; vent: AROME) descarregada el ${fmt({ day: 'numeric', month: 'numeric' }).format(got * 1000)} a les ${hhmm(got)}. Sortides d'emergència i serveis d'OpenStreetMap.`,
-      "És una previsió: mireu el mar abans d'entrar-hi, no nedeu sols, porteu boia i, si el mar canvia, sortiu per la sortida més propera.",
-    ],
+    note: "Com es calcula: cada 250 m, la nota (0-10) combina l'onada que hi arriba (d'on ve, alçada, període i abric de la costa real) amb el vent i les ratxes a l'hora que hi passareu; més de 7 = bo, de 4 a 7 = mogut, 4 o menys = mala mar. El corrent és una estimació i la marea no compta. "
+      + `Previsió d'Open-Meteo (onades: Météo-France; vent: AROME) del ${fmt({ day: 'numeric', month: 'numeric' }).format(got * 1000)} a les ${hhmm(got)}; sortides i serveis d'OpenStreetMap. `
+      + "És una previsió: mireu el mar abans d'entrar-hi, no nedeu sols, porteu boia i, si el mar canvia, sortiu per la sortida més propera.",
   };
 }
 

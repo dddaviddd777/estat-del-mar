@@ -237,23 +237,50 @@ function initMap() {
     if (isDrawing()) return addPointAt(e.latlng);
     openCtxMenu(e.latlng);
   });
+  // (el clic que alguns mòbils envien en deixar anar el dit després de mantenir premut no el tanca)
+  map.on('click', () => { if (Date.now() - lastPick > 600) closeCtxMenu(); });
+  map.on('movestart zoomstart', closeCtxMenu);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtxMenu(); });
   restorePts();
 }
 
 /** Menú del clic dret (o de mantenir premut al mòbil). */
+// El menú es posa damunt del mapa al costat del punt, sense moure el mapa (un popup de Leaflet l'hauria desplaçat
+// perquè hi cabés). Es tanca en tocar el mapa, moure'l, fer zoom o prémer Esc.
+let ctxEl = null;
+function closeCtxMenu() { ctxEl?.remove(); ctxEl = null; }
 function openCtxMenu(ll) {
+  closeCtxMenu();
+  const box = document.createElement('div');
+  box.className = 'ctx-float';
   const el = document.createElement('div');
   el.className = 'ctx-menu';
   el.innerHTML = `<button data-act="punt"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>Consulta el mar aquí</button>
     <button data-act="ruta"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="18.5" r="2.2"/><circle cx="18.5" cy="5.5" r="2.2"/><path d="M8 18.5h7.5a3.3 3.3 0 0 0 0-6.6h-7a3.3 3.3 0 0 1 0-6.6H16" stroke-dasharray="2.2 2.8"/></svg>${hasRoute() ? 'Comença una ruta nova aquí' : 'Comença una ruta aquí'}</button>`;
-  // El menú queda per sota dels botons i del requadre de la temperatura de l'esquerra (si no, el taparien).
-  const left = map.getContainer().querySelector('.leaflet-top.leaflet-left');
-  const top = Math.min(left ? left.getBoundingClientRect().bottom - map.getContainer().getBoundingClientRect().top + 8 : 20, map.getSize().y - 130);
-  const pop = L.popup({ className: 'ctx-pop', closeButton: false, offset: [0, -4], autoPanPaddingTopLeft: [20, top], autoPanPaddingBottomRight: [20, 20] }).setLatLng(ll).setContent(el).openOn(map);
+  const c = map.getContainer();
+  const dot = document.createElement('i');
+  dot.className = 'ctx-dot';
+  box.append(el);
+  c.append(dot, box);
+  L.DomEvent.disableClickPropagation(box);
+  L.DomEvent.disableScrollPropagation(box);
+  L.DomEvent.on(box, 'contextmenu', L.DomEvent.preventDefault);
+  // Al costat del punt (a la dreta i a sota si hi cap; si no, a l'altre costat), sempre dins del mapa.
+  const p = map.latLngToContainerPoint(ll), sz = map.getSize(), w = box.offsetWidth, h = box.offsetHeight, m = 6;
+  let x = p.x + 10, y = p.y + 4;
+  if (x + w > sz.x - m) x = p.x - w - 10;
+  if (y + h > sz.y - m) y = p.y - h - 4;
+  box.style.left = `${Math.max(m, Math.min(sz.x - w - m, x))}px`;
+  box.style.top = `${Math.max(m, Math.min(sz.y - h - m, y))}px`;
+  dot.style.left = `${p.x}px`;
+  dot.style.top = `${p.y}px`;
+  const remove = () => dot.remove();
+  ctxEl = { remove: () => { box.remove(); remove(); } };
+  el.querySelector('button')?.focus({ preventScroll: true });
   el.addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (!act) return;
-    map.closePopup(pop);
+    closeCtxMenu();
     if (act === 'punt') pickPoint(ll.lat, ll.lng);
     else startRouteAt(ll.lat, ll.lng);
   });

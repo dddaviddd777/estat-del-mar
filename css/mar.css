@@ -288,8 +288,8 @@ body.routing .bm-wrap, body.routing .buoy-dot { display: none; }
 /* Panell «Mapa»: el que l'usuari ha amagat */
 body.hide-platges .bm-beach, body.hide-punts .bm-pt, body.hide-boies .buoy-dot { display: none; }
 /* Menú del clic dret / mantenir premut */
-.ctx-pop .leaflet-popup-content-wrapper { padding: 4px; border-radius: 10px; }
-.ctx-pop .leaflet-popup-content { margin: 0; }
+.ctx-float { position: absolute; z-index: 1000; padding: 4px; border-radius: 10px; background: #fff; box-shadow: 0 4px 18px rgba(0, 0, 0, .3); }
+.ctx-dot { position: absolute; z-index: 999; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #1a73e8; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); pointer-events: none; }
 .ctx-menu { display: flex; flex-direction: column; min-width: 190px; }
 .ctx-menu button { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 14px; color: #0b1d2c; text-align: left; cursor: pointer; }
 .ctx-menu button:hover, .ctx-menu button:focus-visible { background: #eef3f8; }
@@ -476,3 +476,10 @@ body.routing .fld-legend, body.routing .fld-read { display: none; }
 .r-pdf-ok span { flex: 1 1 100%; overflow-wrap: anywhere; }
 .r-pdf-ok button, .r-pdf-ok a { padding: 7px 14px; border-radius: 10px; border: 0; background: #1a73e8; color: #fff; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
 .r-pdf-ok a, .r-pdf-ok button + button { background: rgba(255, 255, 255, .14); }
+
+/* Enllaços a Google Maps (bars i pàrquings) */
+.svc-pop { display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.3; }
+.svc-pop small { color: #5b6b78; }
+.svc-pop .gm-link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; background: #1a73e8; color: #fff !important; font-weight: 600; text-decoration: none; }
+.svc-popup .leaflet-popup-content { margin: 10px 12px; }
+.svc-list .gm-link { color: #9fd0ff; text-decoration: underline; text-underline-offset: 2px; }

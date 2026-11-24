@@ -1,9 +1,8 @@
-// La ruta en un PDF A4 per llegir-la amb calma, imprimir-la o enviar-la: capçalera, xifres, mapa gran (tessel·les
-// d'OpenStreetMap amb el traç pintat a sobre), resum, avisos, perfil al llarg de la ruta, taula de trams i serveis.
+// La ruta en un PDF d'un sol full A4 per llegir-la amb calma, imprimir-la o enviar-la: capçalera, xifres, mapa
+// (tessel·les d'OpenStreetMap amb el traç a sobre), resum i avisos, gràfica d'onada i vent i taula de trams.
 // Fa servir jsPDF (cdnjs), que només es baixa la primera vegada que es demana un PDF.
 // Les fonts estàndard del PDF només tenen els caràcters llatins (ISO 8859-1): la resta es canvien (T()).
 import { LEVELS, TZ } from './marine.js';
-import { SERVICE_TYPES } from './services.js';
 
 const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const APP_URL = 'dddaviddd777.github.io/estat-del-mar';
@@ -35,6 +34,25 @@ const NAVY = [11, 29, 44], INK = [28, 40, 52], MUTED = [96, 110, 122], LINE = [2
 const BLUE = [26, 115, 232], WAVE = [23, 78, 166];
 const ALERT = { perill: { bar: [214, 58, 46], bg: [253, 236, 234] }, atencio: { bar: [232, 160, 30], bg: [254, 246, 225] } };
 const EFF = { favor: ['a favor', [31, 140, 70]], contra: ['en contra', [200, 50, 50]], neutre: ['neutre', MUTED] };
+
+/**
+ * Hores en punt dins la nedada (cada `min` minuts: 9:20, 9:40…) i on hi sereu: entre la mostra `i` i la següent, a la
+ * fracció `f`, i a `d` metres. La sortida també hi és si queda prou lluny de la primera hora en punt.
+ */
+function clockTicks(R, min) {
+  const S = R.samples, step = min * 60, out = [];
+  const first = Math.ceil(R.start / step) * step;
+  const times = first - R.start >= step / 2 || first === R.start ? [R.start] : [];
+  for (let t = first === R.start ? first + step : first; t <= R.end; t += step) times.push(t);
+  let i = 0;
+  for (const t of times) {
+    while (i < S.length - 2 && S[i + 1].t < t) i++;
+    const a = S[i], b = S[Math.min(S.length - 1, i + 1)];
+    const f = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
+    out.push({ t, i, f, d: a.d + (b.d - a.d) * f });
+  }
+  return out;
+}
 
 // ---------- Mapa (canvas) ----------
 function loadImg(url) {
@@ -153,13 +171,11 @@ async function renderMap(info, wMm, hMm, tiles = true) {
     g.fillText(text, lx + w / 2, ly + h / 2 + mm(0.1));
   };
 
-  // Hores de pas cada 20 minuts, damunt del traç.
-  let tick = R.start + 20 * 60;
-  for (const smp of S) {
-    if (smp.t < tick) continue;
-    while (tick <= smp.t) tick += 20 * 60;
-    const [x, y] = at(smp);
-    label(hhmm(smp.t), x, y, { bg: 'rgba(11,29,44,.82)', fg: '#fff', size: 2.1 });
+  // Hores de pas en punt (cada 20 o 30 minuts), damunt del traç, les mateixes que a la gràfica.
+  for (const k of clockTicks(R, info.tick ?? 20)) {
+    if (k.t === R.start) continue; // la sortida ja té el seu rètol
+    const [ax, ay] = at(S[k.i]), [bx, by] = at(S[Math.min(S.length - 1, k.i + 1)]);
+    label(hhmm(k.t), ax + (bx - ax) * k.f, ay + (by - ay) * k.f, { bg: 'rgba(11,29,44,.82)', fg: '#fff', size: 2.1 });
   }
   // Números dels trams: l'anada cap a terra i la tornada cap a mar (com a l'app).
   for (const tr of R.trams) {
@@ -186,300 +202,346 @@ async function renderMap(info, wMm, hMm, tiles = true) {
   return { dataUrl, mPerMm: mpp * PX, tilesOk: ok, tilesN: total };
 }
 
-// ---------- PDF ----------
+// ---------- PDF (un sol full A4) ----------
+// Tot en una pàgina: capçalera, xifres, mapa (amb el resum al costat si la ruta és allargada de nord a sud, o a
+// sota si és ampla), gràfica d'onada i vent amb els eixos marcats i la taula de trams en dues columnes.
+const niceStep = (v) => [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].find((s) => s >= v) ?? 100;
+const fmtNum = (v, step) => {
+  if (!v) return '0';
+  const dec = Number.isInteger(step) ? 0 : String(step).split('.')[1].length;
+  return v.toFixed(dec).replace('.', ',');
+};
+const WIND = [224, 102, 47], GUST = [240, 165, 120], WAVEF = [206, 228, 246];
+
 /**
  * Genera el PDF. `info`: { R, title, when, meta, kpis: [{ v, l, color?, warn? }], summary, rec, alerts, trams,
- * services: [{ title, lines: [{ type, text }] }], positions(offM), fetchedAt, notes }. Retorna { blob, name, pages }.
+ * services: [{ title, lines: [{ type, text }] }], positions(offM), note }. Retorna { blob, pages }.
  */
 export async function makeRoutePdf(info) {
-  // Mapa més alt si la ruta és allargada de nord a sud (llavors el resum passa a la pàgina 2).
-  const S0 = info.R.samples, la = S0.map((q) => q.lat), lo = S0.map((q) => q.lon);
-  const asp = ((Math.max(...la) - Math.min(...la)) * 111320) / Math.max(1, (Math.max(...lo) - Math.min(...lo)) * 111320 * Math.cos((la[0] * Math.PI) / 180));
-  const MH = asp > 1.1 ? 194 : asp > 0.8 ? 170 : 148;
-  const [{ jsPDF }, map] = await Promise.all([loadLib(), renderMap(info, 182, MH)]);
+  const R = info.R, S = R.samples;
+  info.tick = R.duration > 150 * 60 ? 30 : 20; // hores de pas: cada 20 min (cada 30 si la nedada és llarga)
+  const { jsPDF } = await loadLib();
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-  const PW = 210, PH = 297, M = 14, CW = PW - 2 * M, FOOT = 16;
-  let y = 0;
+  const PW = 210, PH = 297, M = 10, CW = PW - 2 * M, BOTTOM = PH - 10;
   const pt = 0.3528; // mm per punt
   const font = (size, style = 'normal', color = INK) => { doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(...color); };
   const text = (s, x, yy, o = {}) => doc.text(T(s), x, yy, o);
   const wrap = (s, w) => doc.splitTextToSize(T(s), w);
-
-  const pageHead = () => {
-    font(8, 'bold', MUTED);
-    text('ESTAT DEL MAR · RUTA DE NEDADA', M, 10);
-    font(8, 'normal', MUTED);
-    text(`${info.title} · ${info.when}`, PW - M, 10, { align: 'right', maxWidth: 120 });
-    doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, 12.5, PW - M, 12.5);
-    y = 18;
-  };
-  const ensure = (h) => { if (y + h > PH - FOOT) { doc.addPage(); pageHead(); return true; } return false; };
-  const para = (s, { size = 9.5, style = 'normal', color = INK, w = CW, x = M, lh = 1.38 } = {}) => {
-    font(size, style, color);
-    const step = size * pt * lh;
-    for (const l of wrap(s, w)) { ensure(step); text(l, x, y + size * pt * 0.8); y += step; }
-  };
-  const heading = (s) => {
-    ensure(14);
-    y += 4;
-    font(10.5, 'bold', NAVY);
-    text(s.toUpperCase(), M, y + 3.6, { charSpace: 0.25 });
-    doc.setDrawColor(...BLUE); doc.setLineWidth(0.6); doc.line(M, y + 5.6, M + 14, y + 5.6);
-    y += 9;
+  const fit = (s, w) => {
+    let t = T(s);
+    if (doc.getTextWidth(t) <= w) return t;
+    while (t.length > 1 && doc.getTextWidth(`${t}...`) > w) t = t.slice(0, -1);
+    return `${t.trimEnd()}...`;
   };
 
   // --- Capçalera ---
-  doc.setFillColor(...NAVY); doc.rect(0, 0, PW, 36, 'F');
-  font(8, 'bold', [140, 200, 235]);
-  text('ESTAT DEL MAR · RUTA DE NEDADA', M, 10, { charSpace: 0.4 });
-  let tsize = 19;
-  font(tsize, 'bold', [255, 255, 255]);
-  while (doc.getTextWidth(T(info.title)) > CW && tsize > 13) { tsize -= 1; font(tsize, 'bold', [255, 255, 255]); }
-  text(wrap(info.title, CW)[0], M, 20.5);
-  font(10.5, 'normal', [205, 220, 232]);
-  text(info.when, M, 27.5);
-  font(9, 'normal', [160, 185, 205]);
-  text(info.meta, M, 32.5);
+  doc.setFillColor(...NAVY); doc.rect(0, 0, PW, 21, 'F');
+  font(6.8, 'bold', [140, 200, 235]); text('ESTAT DEL MAR · RUTA DE NEDADA', M, 6, { charSpace: 0.35 });
+  let ts = 15;
+  font(ts, 'bold', [255, 255, 255]);
+  while (doc.getTextWidth(T(info.title)) > CW && ts > 10.5) { ts -= 0.5; font(ts, 'bold', [255, 255, 255]); }
+  doc.text(fit(info.title, CW), M, 12.8);
+  font(8, 'normal', [205, 220, 232]); doc.text(fit(`${info.when} · ${info.meta}`, CW), M, 18);
 
   // --- Xifres ---
-  y = 41;
-  const n = info.kpis.length, gap = 3, bw = (CW - gap * (n - 1)) / n;
+  let y = 24;
+  const nk = info.kpis.length, kg = 1.8, kw = (CW - kg * (nk - 1)) / nk, kh = 12;
   info.kpis.forEach((k, i) => {
-    const x = M + i * (bw + gap);
-    doc.setFillColor(...(k.warn ? [255, 241, 228] : SOFT)); doc.roundedRect(x, y, bw, 19, 2, 2, 'F');
-    font(15, 'bold', k.warn ? [190, 90, 10] : INK);
-    const vw = doc.getTextWidth(T(k.v)) + (k.color ? 5 : 0);
-    const vx = x + (bw - vw) / 2;
-    if (k.color) { doc.setFillColor(...rgb(k.color)); doc.circle(vx + 1.6, y + 7.4, 1.8, 'F'); }
-    text(k.v, vx + (k.color ? 5 : 0), y + 9.4);
-    font(7.5, 'normal', MUTED);
-    text(k.l, x + bw / 2, y + 15, { align: 'center' });
+    const x = M + i * (kw + kg);
+    doc.setFillColor(...(k.warn ? [255, 241, 228] : SOFT)); doc.roundedRect(x, y, kw, kh, 1.6, 1.6, 'F');
+    font(11, 'bold', k.warn ? [190, 90, 10] : INK);
+    const vw = doc.getTextWidth(T(k.v)) + (k.color ? 3.6 : 0), vx = x + (kw - vw) / 2;
+    if (k.color) { doc.setFillColor(...rgb(k.color)); doc.circle(vx + 1.3, y + 4.6, 1.3, 'F'); }
+    text(k.v, vx + (k.color ? 3.6 : 0), y + 6);
+    font(6, 'normal', MUTED); doc.text(fit(k.l, kw - 1.5), x + kw / 2, y + 9.8, { align: 'center' });
   });
-  y += 24;
+  y += kh + 3;
 
-  // --- Mapa ---
-  if (map) doc.addImage(map.dataUrl, 'JPEG', M, y, CW, MH, undefined, 'FAST');
-  else { doc.setFillColor(...SOFT); doc.rect(M, y, CW, MH, 'F'); font(9, 'normal', MUTED); text("No s'ha pogut dibuixar el mapa.", M + CW / 2, y + MH / 2, { align: 'center' }); }
-  doc.setDrawColor(...LINE); doc.setLineWidth(0.4); doc.rect(M, y, CW, MH);
-  if (map) {
-    // Barra d'escala (a baix a l'esquerra) i nord (a dalt a la dreta).
-    const nice = [50, 100, 200, 250, 500, 1000, 2000, 5000];
-    const len = nice.reduce((b, v) => (Math.abs(v / map.mPerMm - 28) < Math.abs(b / map.mPerMm - 28) ? v : b));
-    const lw = len / map.mPerMm, bx = M + 4, by = y + MH - 6;
-    doc.setFillColor(255, 255, 255); doc.roundedRect(bx - 2, by - 5.5, lw + 4, 8, 1.2, 1.2, 'F');
-    doc.setDrawColor(...NAVY); doc.setLineWidth(0.6); doc.line(bx, by, bx + lw, by); doc.line(bx, by - 1.3, bx, by + 0.3); doc.line(bx + lw, by - 1.3, bx + lw, by + 0.3);
-    font(7, 'bold', NAVY); text(fmtDist(len), bx + lw / 2, by - 1.8, { align: 'center' });
-    const nx = PW - M - 7, ny = y + 8;
-    doc.setFillColor(255, 255, 255); doc.circle(nx, ny, 4.2, 'F');
-    doc.setFillColor(...NAVY); doc.triangle(nx, ny - 3.2, nx - 1.8, ny + 1.2, nx + 1.8, ny + 1.2, 'F');
-    font(6.5, 'bold', NAVY); text('N', nx, ny + 3.6, { align: 'center' });
-    font(6, 'normal', MUTED);
-    const attr = T("Mapa © col·laboradors d'OpenStreetMap");
-    const aw = doc.getTextWidth(attr) + 3;
-    doc.setFillColor(255, 255, 255); doc.rect(PW - M - aw, y + MH - 4.4, aw, 4.4, 'F');
-    text(attr, PW - M - 1.5, y + MH - 1.3, { align: 'right' });
-  }
-  y += MH + 3;
+  // --- Mides de la part de baix (gràfica, trams i nota), per saber quant d'alt pot fer el mapa ---
+  const CHART_H = 64;
+  const half = Math.ceil(info.trams.length / 2);
+  const legs = R.back ? [info.trams.filter((t) => t.leg !== 'tornada'), info.trams.filter((t) => t.leg === 'tornada')]
+    : [info.trams.slice(0, half), info.trams.slice(half)];
+  const ROW = 4.1, rows = Math.max(1, ...legs.map((l) => l.length));
+  const TABLE_H = 5 + 3.2 + 4.2 + rows * ROW + 1.5 + 4.5;
+  font(6.3); const noteLines = wrap(info.note, CW);
+  const NOTE_H = noteLines.length * 6.3 * pt * 1.3 + 1;
+  const free = BOTTOM - y - CHART_H - 3 - TABLE_H - NOTE_H - 2;
 
-  // --- Llegenda del mapa ---
-  font(7.5, 'normal', MUTED);
-  let lx = M;
-  const leg = (draw, s, w) => { draw(lx, y + 1.6); lx += w; text(s, lx, y + 2.6); lx += doc.getTextWidth(T(s)) + 4.5; };
-  const seg = (c, wdt) => (x, yy) => { doc.setDrawColor(...rgb(c)); doc.setLineWidth(wdt); doc.line(x, yy, x + 6, yy); };
-  leg(seg(LEVELS[0].color, 1.3), 'Bo (més de 7)', 8);
-  leg(seg(LEVELS[1].color, 1.3), 'Mogut (4-7)', 8);
-  leg(seg(LEVELS[2].color, 1.3), 'Mala mar (4 o menys)', 8);
-  leg((x, yy) => { doc.setFillColor(31, 157, 85); doc.roundedRect(x, yy - 1.6, 3.2, 3.2, 0.7, 0.7, 'F'); }, 'Sortida (platja, escala, rampa)', 4.6);
-  leg((x, yy) => { doc.setDrawColor(...rgb(LEVELS[0].color)); doc.setLineWidth(0.5); doc.setFillColor(255, 255, 255); doc.roundedRect(x, yy - 1.7, 3.6, 3.4, 0.6, 0.6, 'FD'); }, 'Núm. de tram', 5);
-  y += 5;
-  font(7.5, 'normal', MUTED);
-  text(info.R.back ? 'Línia gruixuda: anada · línia prima, desplaçada cap a mar: tornada (pel mateix camí). Hores de pas cada 20 minuts.' : 'Fletxes: sentit de nedada. Hores de pas cada 20 minuts.', M, y + 2.6);
-  y += 6;
-  if (map && map.tilesOk < map.tilesN) { font(7, 'italic', [190, 90, 10]); text(`Falten ${map.tilesN - map.tilesOk} trossos del mapa de fons (sense connexió?).`, M, y + 2.4); y += 4.5; }
-
-  // --- Resum, recomanació i avisos ---
-  heading('Resum');
-  para(info.summary);
-  const boxPara = (s, bg, bar) => {
-    font(9.5, 'normal', INK);
-    const lines = wrap(s, CW - 9);
-    const h = lines.length * 9.5 * pt * 1.38 + 5;
-    ensure(h + 2);
-    y += 2;
-    doc.setFillColor(...bg); doc.roundedRect(M, y, CW, h, 1.5, 1.5, 'F');
-    doc.setFillColor(...bar); doc.rect(M, y, 1.6, h, 'F');
-    lines.forEach((l, i) => text(l, M + 5, y + 3 + 9.5 * pt * 0.8 + i * 9.5 * pt * 1.38));
-    y += h;
-  };
-  if (info.rec) boxPara(info.rec, [232, 240, 254], BLUE);
-  if (info.alerts.length) {
-    heading('Avisos de temps');
-    for (const a of info.alerts) boxPara(`${a.level === 'perill' ? 'Perill' : 'Atenció'}: ${a.text}`, ALERT[a.level]?.bg ?? SOFT, ALERT[a.level]?.bar ?? MUTED);
-    y += 1.5;
-    para("Els fronts i les tempestes es poden avançar o endarrerir fins a 2 hores. Abans de sortir, mireu el radar del Meteocat (meteo.cat) o de l'AEMET.", { size: 8, color: MUTED });
-  }
-
-  // --- Perfil al llarg de la ruta ---
-  const CH = 50;
-  ensure(CH + 26);
-  heading('Al llarg de la ruta');
-  drawChart(doc, info, M, y, CW, CH, font, text);
-  y += CH + 2;
-  para(`Barres: nota de cada tros de 250 m (color del semàfor, escala de l'esquerra). Línia blava: onada a la platja (escala de la dreta). Franja de sota: vent i corrent a favor (verd) o en contra (vermell). Marques verdes: sortides; taronja: el tram més llarg sense sortida.`, { size: 7.5, color: MUTED });
-
-  // --- Trams ---
-  heading('Trams');
-  const cols = [
-    { k: 'n', l: 'Tram', w: 11 }, { k: 'h', l: 'Hora', w: 14 }, { k: 's', l: 'Nota', w: 12 },
-    { k: 'p', l: 'Lloc i mar', w: 58 }, { k: 'v', l: 'Vent i corrent', w: 38 }, { k: 'x', l: 'Sortida', w: 33 }, { k: 'e', l: 'Esforç', w: 16 },
-  ];
-  const head = () => {
-    doc.setFillColor(...NAVY); doc.rect(M, y, CW, 6.5, 'F');
-    font(7.5, 'bold', [255, 255, 255]);
-    let x = M;
-    for (const c of cols) { text(c.l, x + 1.8, y + 4.4); x += c.w; }
-    y += 6.5;
-  };
-  ensure(20);
-  head();
-  const LH = 3.5;
-  info.trams.forEach((tr, i) => {
-    font(8.5, 'bold'); const place = wrap(tr.place, cols[3].w - 3.5);
-    font(8, 'normal'); const sea = wrap(`${tr.sea} · ${tr.sector}`, cols[3].w - 3.5);
-    const wind = wrap([tr.wind, tr.cur].filter(Boolean).join(' · ') || '-', cols[4].w - 3.5);
-    const flags = tr.flags ? wrap(tr.flags, cols[4].w - 3.5) : [];
-    const exit = wrap(tr.exit || '-', cols[5].w - 3.5);
-    const lines = Math.max(place.length + sea.length, wind.length + flags.length, exit.length, 2);
-    const h = lines * LH + 3.4;
-    if (ensure(h)) head();
-    if (i % 2) { doc.setFillColor(...SOFT); doc.rect(M, y, CW, h, 'F'); }
-    const ty = y + 1.7 + 8 * pt * 0.85;
-    let x = M;
-    // Número (blanc a l'anada, fosc a la tornada, amb la vora del color del tram)
-    const col = rgb(LEVELS[tr.level].color), tor = tr.leg === 'tornada';
-    doc.setDrawColor(...col); doc.setLineWidth(0.6);
-    doc.setFillColor(...(tor ? NAVY : [255, 255, 255])); doc.roundedRect(x + 1.8, y + 1.6, 6.4, 5, 1, 1, 'FD');
-    font(8.5, 'bold', tor ? [255, 255, 255] : NAVY); text(String(tr.n), x + 5, y + 5.1, { align: 'center' });
-    x += cols[0].w;
-    font(8.5, 'bold', INK); text(hhmm(tr.t), x + 1.8, ty);
-    if (tor) { font(6.5, 'normal', MUTED); text('tornada', x + 1.8, ty + LH); }
-    x += cols[1].w;
-    doc.setFillColor(...col); doc.roundedRect(x + 1.5, y + 1.6, 9, 5, 1.2, 1.2, 'F');
-    font(8.5, 'bold', NAVY); text(nf1(tr.score), x + 6, y + 5.1, { align: 'center' });
-    x += cols[2].w;
-    font(8.5, 'bold', INK); place.forEach((l, j) => text(l, x + 1.8, ty + j * LH));
-    font(8, 'normal', MUTED); sea.forEach((l, j) => text(l, x + 1.8, ty + (place.length + j) * LH));
-    x += cols[3].w;
-    font(8, 'normal', INK); wind.forEach((l, j) => text(l, x + 1.8, ty + j * LH));
-    font(8, 'italic', [190, 90, 10]); flags.forEach((l, j) => text(l, x + 1.8, ty + (wind.length + j) * LH));
-    x += cols[4].w;
-    font(8, 'normal', tr.exitFar ? [190, 90, 10] : INK); exit.forEach((l, j) => text(l, x + 1.8, ty + j * LH));
-    x += cols[5].w;
-    const [et, ec] = EFF[tr.effort] ?? EFF.neutre;
-    font(8, tr.effort === 'neutre' ? 'normal' : 'bold', ec); text(et, x + 1.8, ty);
-    y += h;
-    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, y, PW - M, y);
-  });
-  y += 2;
-  para("Cada tram es valora pel seu tros més mogut. Esforç: si el vent i el corrent us ajuden o us frenen en el sentit de nedada. «Punta exposada»: passeu per davant d'un cap on l'onada arriba de més direccions.", { size: 7.5, color: MUTED });
-
-  // --- Serveis ---
-  if (info.services.some((sv) => sv.lines.length)) {
-    heading('Serveis');
-    for (const sv of info.services) {
-      if (!sv.lines.length) continue;
-      ensure(10);
-      font(9, 'bold', INK); text(sv.title, M, y + 3); y += 5;
-      for (const l of sv.lines) {
-        ensure(5);
-        doc.setFillColor(...rgb(SERVICE_TYPES[l.type].color)); doc.roundedRect(M, y + 0.3, 3.4, 3.4, 0.7, 0.7, 'F');
-        font(9, 'normal', INK); text(wrap(l.text, CW - 6)[0], M + 5.5, y + 3);
-        y += 4.8;
+  // --- Bloc de text: resum, millor hora, avisos i serveis (draw = false només el mesura) ---
+  const block = (x, y0, w, draw) => {
+    let yy = y0;
+    const P = (s, size, style, color) => {
+      font(size, style, color);
+      const L = wrap(s, w), step = size * pt * 1.3;
+      if (draw) L.forEach((l, i) => doc.text(l, x, yy + size * pt * 0.8 + i * step));
+      yy += L.length * step;
+    };
+    const boxed = (s, bg, bar) => {
+      font(7.4, 'normal', INK);
+      const L = wrap(s, w - 4.5), step = 7.4 * pt * 1.3, h = L.length * step + 2.4;
+      if (draw) {
+        doc.setFillColor(...bg); doc.roundedRect(x, yy, w, h, 1, 1, 'F');
+        doc.setFillColor(...bar); doc.rect(x, yy, 1.2, h, 'F');
+        L.forEach((l, i) => doc.text(l, x + 3, yy + 1.2 + 7.4 * pt * 0.8 + i * step));
       }
-      y += 1.5;
+      yy += h + 1.4;
+    };
+    P('RESUM', 7.2, 'bold', NAVY); yy += 0.6;
+    P(info.summary, 7.6, 'normal', INK); yy += 1.6;
+    if (info.rec) boxed(info.rec, [232, 240, 254], BLUE);
+    for (const a of info.alerts) boxed(`${a.level === 'perill' ? 'Perill' : 'Atenció'}: ${a.text}`, ALERT[a.level]?.bg ?? SOFT, ALERT[a.level]?.bar ?? MUTED);
+    if (info.alerts.length) { P("Els fronts i les tempestes es poden avançar o endarrerir fins a 2 hores: abans de sortir, mireu el radar del Meteocat o de l'AEMET.", 6.3, 'normal', MUTED); yy += 1.4; }
+    const sv = info.services.filter((s) => s.lines.length);
+    if (sv.length) {
+      P('SERVEIS', 7.2, 'bold', NAVY); yy += 0.4;
+      for (const s of sv) { P(`${s.title}: ${s.lines.map((l) => l.text).join(' · ')}.`, 6.8, 'normal', INK); yy += 0.6; }
     }
-    para("D'OpenStreetMap: pot ser que en falti algun o que siguin de temporada.", { size: 7.5, color: MUTED });
+    return yy - y0;
+  };
+
+  // --- Mapa: al costat del text si la ruta és allargada de nord a sud; si no, a tota l'amplada i el text a sota ---
+  const la = S.map((q) => q.lat), lo = S.map((q) => q.lon);
+  const asp = ((Math.max(...la) - Math.min(...la)) * 111320) / Math.max(1, (Math.max(...lo) - Math.min(...lo)) * 111320 * Math.cos((la[0] * Math.PI) / 180));
+  const tall = asp > 0.85;
+  const LEG_H = tall ? 9.5 : 6;
+  let mw, mh, tx, tw, th;
+  if (tall) {
+    mw = 90; tx = M + mw + 4; tw = CW - mw - 4;
+    th = block(tx, y, tw, false);
+    mh = Math.max(80, Math.min(130, free - LEG_H));
+  } else {
+    mw = CW; tx = M; tw = CW;
+    th = block(tx, 0, tw, false);
+    mh = Math.max(55, Math.min(105, free - LEG_H - th - 2));
   }
+  const map = await renderMap(info, mw, mh);
+  if (map) doc.addImage(map.dataUrl, 'JPEG', M, y, mw, mh, undefined, 'FAST');
+  else { doc.setFillColor(...SOFT); doc.rect(M, y, mw, mh, 'F'); font(8, 'normal', MUTED); text("No s'ha pogut dibuixar el mapa.", M + mw / 2, y + mh / 2, { align: 'center' }); }
+  doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(M, y, mw, mh);
+  if (map) {
+    // Barra d'escala (a baix a l'esquerra), nord (a dalt a la dreta) i atribució.
+    const nice = [50, 100, 200, 250, 500, 1000, 2000, 5000];
+    const len = nice.reduce((b, v) => (Math.abs(v / map.mPerMm - 18) < Math.abs(b / map.mPerMm - 18) ? v : b));
+    const lw = len / map.mPerMm, bx = M + 3, by = y + mh - 4;
+    doc.setFillColor(255, 255, 255); doc.roundedRect(bx - 1.5, by - 4.3, lw + 3, 6, 1, 1, 'F');
+    doc.setDrawColor(...NAVY); doc.setLineWidth(0.5); doc.line(bx, by, bx + lw, by); doc.line(bx, by - 1, bx, by + 0.2); doc.line(bx + lw, by - 1, bx + lw, by + 0.2);
+    font(6, 'bold', NAVY); text(fmtDist(len), bx + lw / 2, by - 1.4, { align: 'center' });
+    const nx = M + mw - 5.5, ny = y + 6;
+    doc.setFillColor(255, 255, 255); doc.circle(nx, ny, 3.4, 'F');
+    doc.setFillColor(...NAVY); doc.triangle(nx, ny - 2.6, nx - 1.4, ny + 1, nx + 1.4, ny + 1, 'F');
+    font(5.5, 'bold', NAVY); text('N', nx, ny + 2.9, { align: 'center' });
+    font(5, 'normal', MUTED);
+    const attr = T("© col·laboradors d'OpenStreetMap"), aw = doc.getTextWidth(attr) + 2;
+    doc.setFillColor(255, 255, 255); doc.rect(M + mw - aw, y + mh - 3.4, aw, 3.4, 'F');
+    doc.text(attr, M + mw - 1, y + mh - 1, { align: 'right' });
+  }
+  // Llegenda del mapa (a sota, a la mateixa amplada)
+  let ly = y + mh + 1.3, lx = M;
+  const legItem = (draw, s, w0) => {
+    font(6.2, 'normal', MUTED);
+    const w = w0 + doc.getTextWidth(T(s)) + 3.2;
+    if (lx > M && lx + w > M + mw) { lx = M; ly += 3.4; }
+    draw(lx, ly + 1.3); font(6.2, 'normal', MUTED); text(s, lx + w0, ly + 2.2); lx += w;
+  };
+  const seg = (c) => (x, yy) => { doc.setDrawColor(...rgb(c)); doc.setLineWidth(1); doc.line(x, yy, x + 4.5, yy); };
+  legItem(seg(LEVELS[0].color), 'Bo (més de 7)', 5.8);
+  legItem(seg(LEVELS[1].color), 'Mogut (4-7)', 5.8);
+  legItem(seg(LEVELS[2].color), 'Mala mar (4 o menys)', 5.8);
+  legItem((x, yy) => { doc.setFillColor(31, 157, 85); doc.roundedRect(x, yy - 1.3, 2.6, 2.6, 0.5, 0.5, 'F'); }, 'Sortida', 3.6);
+  legItem((x, yy) => { doc.setDrawColor(...rgb(LEVELS[0].color)); doc.setLineWidth(0.4); doc.setFillColor(255, 255, 255); doc.roundedRect(x, yy - 1.4, 3, 2.8, 0.5, 0.5, 'FD'); }, 'Tram', 4);
+  legItem(() => {}, R.back ? `Línia prima: tornada · hores de pas cada ${info.tick} min` : `Hores de pas cada ${info.tick} min`, 0);
+  if (map && map.tilesOk < map.tilesN) legItem(() => {}, `Falten ${map.tilesN - map.tilesOk} trossos del mapa de fons`, 0);
+  const mapBottom = ly + 3.6;
+  if (tall) { block(tx, y, tw, true); y = Math.max(mapBottom, y + th) + 2.5; }
+  else { y = mapBottom + 1.5; block(M, y, CW, true); y += th + 1.5; }
 
-  // --- Com es calcula ---
-  heading('Com es calcula');
-  for (const nline of info.notes) { para(nline, { size: 8, color: MUTED }); y += 1; }
+  // --- Gràfica (si no hi cap, a una pàgina nova: no hauria de passar) ---
+  if (y + CHART_H > BOTTOM) { doc.addPage(); y = 12; }
+  drawChart(doc, info, M, y, CW, CHART_H, font, text);
+  y += CHART_H + 3;
 
-  // --- Peu a totes les pàgines ---
+  // --- Trams en dues columnes ---
+  if (y + TABLE_H > BOTTOM) { doc.addPage(); y = 12; }
+  font(7.2, 'bold', NAVY); text('TRAMS', M, y + 3);
+  font(6.3, 'normal', MUTED); text('Cada tram amb el seu tros més mogut: nota, onada a la platja, vent i ratxes, i on és la sortida més propera.', M + 11, y + 3);
+  y += 5;
+  const colW = (CW - 4) / 2;
+  const cols = [['', 7], ['Hora', 9.5], ['Nota', 9], ['Lloc', 26], ['Onada', 13], ['Vent (ratxes)', 15.5], ['Sortida', 10]];
+  legs.forEach((list, li) => {
+    if (!list.length) return;
+    const x0 = M + li * (colW + 4);
+    let yy = y;
+    font(6.8, 'bold', INK);
+    text(R.back ? (li ? 'Tornada' : 'Anada') : li ? 'Segona meitat' : 'Primera meitat', x0, yy + 2.2);
+    yy += 3.2;
+    doc.setFillColor(...NAVY); doc.rect(x0, yy, colW, 4.2, 'F');
+    font(6.2, 'bold', [255, 255, 255]);
+    let cx = x0;
+    for (const [l, w] of cols) { if (l) text(l, cx + 1, yy + 2.9); cx += w; }
+    yy += 4.2;
+    list.forEach((tr, i) => {
+      if (i % 2) { doc.setFillColor(...SOFT); doc.rect(x0, yy, colW, ROW, 'F'); }
+      const by = yy + 2.85;
+      let x = x0;
+      const col = rgb(LEVELS[tr.level].color), tor = tr.leg === 'tornada';
+      doc.setDrawColor(...col); doc.setLineWidth(0.45);
+      doc.setFillColor(...(tor ? NAVY : [255, 255, 255])); doc.roundedRect(x + 0.6, yy + 0.5, 5.4, 3.1, 0.6, 0.6, 'FD');
+      font(6.5, 'bold', tor ? [255, 255, 255] : NAVY); text(String(tr.n), x + 3.3, by, { align: 'center' });
+      x += cols[0][1];
+      font(6.8, 'normal', INK); text(hhmm(tr.t), x + 1, by); x += cols[1][1];
+      doc.setFillColor(...col); doc.roundedRect(x + 0.5, yy + 0.5, 7.4, 3.1, 0.8, 0.8, 'F');
+      font(6.8, 'bold', NAVY); text(nf1(tr.score), x + 4.2, by, { align: 'center' }); x += cols[2][1];
+      font(6.8, 'bold', INK); doc.text(fit(tr.place, cols[3][1] - 1.5), x + 1, by); x += cols[3][1];
+      font(6.8, 'normal', INK); text(`${nf1(tr.hs)} m${tr.seaFrom ? ` ${tr.seaFrom}` : ''}`, x + 1, by); x += cols[4][1];
+      text(tr.windKmh == null ? '-' : `${Math.round(tr.windKmh)} ${tr.windFrom ?? ''} (${Math.round(tr.gust ?? tr.windKmh)})`, x + 1, by); x += cols[5][1];
+      font(6.8, tr.exitFar ? 'bold' : 'normal', tr.exitFar ? [190, 90, 10] : INK);
+      text(tr.exitM == null ? '-' : tr.exitM < 120 ? 'aquí' : fmtDist(tr.exitM), x + 1, by);
+      if (EFF[tr.effort] && tr.effort !== 'neutre') { doc.setFillColor(...EFF[tr.effort][1]); doc.circle(x0 + colW - 1.5, yy + ROW / 2, 0.9, 'F'); }
+      yy += ROW;
+    });
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(x0, yy, x0 + colW, yy);
+  });
+  y += 3.2 + 4.2 + rows * ROW + 1.5;
+  font(6, 'normal', MUTED);
+  let ex = M;
+  const legTxt = "Onada: alçada a la platja (m) i d'on ve. Vent: km/h, d'on bufa i, entre parèntesis, les ratxes. Punt al final de la fila:";
+  text(legTxt, ex, y + 2); ex += doc.getTextWidth(T(legTxt)) + 1.5;
+  doc.setFillColor(...EFF.favor[1]); doc.circle(ex + 0.8, y + 1.3, 0.8, 'F'); text('vent i corrent a favor,', ex + 2.3, y + 2); ex += doc.getTextWidth(T('vent i corrent a favor,')) + 4;
+  doc.setFillColor(...EFF.contra[1]); doc.circle(ex + 0.8, y + 1.3, 0.8, 'F'); text('en contra.', ex + 2.3, y + 2);
+  y += 4.5;
+
+  // --- Nota i peu ---
+  if (y + NOTE_H > BOTTOM) { doc.addPage(); y = 12; }
+  font(6.3, 'normal', MUTED);
+  noteLines.forEach((l, i) => doc.text(l, M, y + 2 + i * 6.3 * pt * 1.3));
   const pages = doc.getNumberOfPages();
   const made = fmt({ day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(Date.now());
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
-    doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, PH - 11, PW - M, PH - 11);
-    font(7, 'normal', MUTED);
-    text(`Estat del Mar · ${APP_URL} · fet el ${made}`, M, PH - 7);
-    text(`Pàgina ${i} de ${pages}`, PW - M, PH - 7, { align: 'right' });
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.line(M, PH - 8, PW - M, PH - 8);
+    font(6.3, 'normal', MUTED);
+    text(`Estat del Mar · ${APP_URL} · fet el ${made}`, M, PH - 4.5);
+    if (pages > 1) text(`${i} / ${pages}`, PW - M, PH - 4.5, { align: 'right' });
   }
   doc.setProperties({ title: T(`Ruta de nedada: ${info.title}`), subject: T(info.when), creator: 'Estat del Mar' });
   return { blob: doc.output('blob'), pages };
 }
 
-/** Perfil: nota de cada mostra (barres), onada a la platja (línia), esforç, sortides i hores, en vectors. */
+/**
+ * Gràfica al llarg de la ruta: onada a la platja (àrea blava, eix de l'esquerra, en m) i vent (línia taronja) amb
+ * les ratxes (discontínua), eix de la dreta en km/h. Eix X: hora de pas i km nedats. A dalt, la franja de la nota
+ * (color del semàfor); a sota, les sortides i el tram més llarg sense sortida.
+ */
 function drawChart(doc, info, X0, Y0, W, H, font, text) {
   const R = info.R, S = R.samples;
-  const lx = X0 + 8, w = W - 17; // marges per a les escales
-  const top = Y0 + 3, hb = H - 22; // barres
-  const yE = top + hb + 2, yX = yE + 4.2, yT = yX + 7;
-  doc.setFillColor(...SOFT); doc.roundedRect(X0, Y0, W, H, 1.5, 1.5, 'F');
-  const x = (d) => lx + (d / R.length) * w;
+  // Títol i llegenda (de dreta a esquerra)
+  font(7.2, 'bold', NAVY); text('ONADA I VENT AL LLARG DE LA RUTA', X0, Y0 + 3);
+  let lx = X0 + W;
+  const leg = (s, draw) => { font(6.3, 'normal', INK); lx -= doc.getTextWidth(T(s)); text(s, lx, Y0 + 3); lx -= 6.5; draw(lx, Y0 + 2.1); lx -= 4.5; };
+  leg('ratxes (km/h)', (x, y) => { doc.setDrawColor(...GUST); doc.setLineWidth(0.5); doc.setLineDashPattern([0.8, 0.7], 0); doc.line(x, y, x + 5, y); doc.setLineDashPattern([], 0); });
+  leg('vent (km/h, eix de la dreta)', (x, y) => { doc.setDrawColor(...WIND); doc.setLineWidth(0.7); doc.line(x, y, x + 5, y); });
+  leg('onada a la platja (m, eix de l\'esquerra)', (x, y) => { doc.setFillColor(...WAVEF); doc.rect(x, y - 1.2, 5, 2.2, 'F'); doc.setDrawColor(...WAVE); doc.setLineWidth(0.7); doc.line(x, y - 1.2, x + 5, y - 1.2); });
+
+  const px0 = X0 + 14, px1 = X0 + W - 14, pw = px1 - px0;
+  const yNote = Y0 + 6, pTop = Y0 + 11.5, ph = H - 29, pBot = pTop + ph;
+  const yExit = pBot + 2, yTime = yExit + 7;
+  const x = (d) => px0 + (d / R.length) * pw;
+  // Escales: 4 divisions a cada eix, que comparteixen les línies guia.
+  const maxHs = Math.max(0.2, ...S.map((s) => s.a.beachHs ?? 0));
+  const maxW = Math.max(10, ...S.map((s) => Math.max(s.h.wind ?? 0, s.h.gust ?? 0)));
+  const hStep = niceStep(maxHs / 4), wStep = niceStep(maxW / 4);
+  const hTop = hStep * 4, wTop = wStep * 4;
+  const yH = (v) => pBot - ((v ?? 0) / hTop) * ph, yW = (v) => pBot - ((v ?? 0) / wTop) * ph;
+
+  // Fons i tornada
+  doc.setFillColor(...SOFT); doc.rect(px0, pTop, pw, ph, 'F');
   const turn = R.back ? S.find((s, i) => S[i + 1]?.leg === 'tornada') : null;
   if (turn) {
-    doc.setFillColor(232, 237, 242); doc.rect(x(turn.d), top - 2, lx + w - x(turn.d), hb + 2, 'F');
-    font(6.5, 'normal', MUTED); text('tornada', x(turn.d) + 1.2, top + 1.2);
+    doc.setFillColor(233, 238, 243); doc.rect(x(turn.d), pTop, px1 - x(turn.d), ph, 'F');
+    doc.setDrawColor(...MUTED); doc.setLineWidth(0.25); doc.setLineDashPattern([1, 1], 0); doc.line(x(turn.d), yNote, x(turn.d), pBot); doc.setLineDashPattern([], 0);
+    font(6, 'italic', MUTED); text('anada', x(turn.d) - 1, pTop + 2.6, { align: 'right' }); text('tornada', x(turn.d) + 1, pTop + 2.6);
   }
-  // Línies guia: 4 i 7 (els llindars del semàfor)
-  doc.setLineWidth(0.15); doc.setDrawColor(...LINE);
-  for (const v of [0, 4, 7, 10]) doc.line(lx, top + hb - (v / 10) * hb, lx + w, top + hb - (v / 10) * hb);
-  font(6.5, 'normal', MUTED);
-  for (const v of [0, 4, 7, 10]) text(String(v), lx - 1.5, top + hb - (v / 10) * hb + 1, { align: 'right' });
-  const bw = Math.max(0.6, w / S.length - 0.25);
-  for (const s of S) {
-    const hh = Math.max(0.6, (s.a.score / 10) * hb);
-    doc.setFillColor(...rgb(LEVELS[s.a.level].color));
-    doc.rect(x(s.d) - bw / 2, top + hb - hh, bw, hh, 'F');
-    const ec = s.effort === 'favor' ? [120, 205, 145] : s.effort === 'contra' ? [235, 120, 120] : [222, 228, 234];
-    doc.setFillColor(...ec); doc.rect(x(s.d) - bw / 2 - 0.15, yE, bw + 0.3, 2.4, 'F');
+  // Línies guia i valors dels dos eixos
+  doc.setDrawColor(...LINE); doc.setLineWidth(0.15);
+  for (let i = 0; i <= 4; i++) {
+    const yy = pBot - (i / 4) * ph;
+    if (i) doc.line(px0, yy, px1, yy);
+    doc.setDrawColor(...MUTED); doc.line(px0 - 1, yy, px0, yy); doc.line(px1, yy, px1 + 1, yy); doc.setDrawColor(...LINE);
+    font(6.3, 'bold', WAVE); text(fmtNum(i * hStep, hStep), px0 - 1.6, yy + 1, { align: 'right' });
+    font(6.3, 'bold', WIND); text(fmtNum(i * wStep, wStep), px1 + 1.6, yy + 1);
   }
-  const maxHs = Math.max(0.5, ...S.map((s) => s.a.beachHs ?? 0));
-  const wy = (v) => top + hb - ((v ?? 0) / maxHs) * hb;
-  doc.setDrawColor(255, 255, 255); doc.setLineWidth(1.3);
-  for (let i = 1; i < S.length; i++) doc.line(x(S[i - 1].d), wy(S[i - 1].a.beachHs), x(S[i].d), wy(S[i].a.beachHs));
-  doc.setDrawColor(...WAVE); doc.setLineWidth(0.6);
-  for (let i = 1; i < S.length; i++) doc.line(x(S[i - 1].d), wy(S[i - 1].a.beachHs), x(S[i].d), wy(S[i].a.beachHs));
-  font(6.5, 'bold', WAVE);
-  text(`${nf1(maxHs)} m`, lx + w + 1.2, top + 1);
-  text('0 m', lx + w + 1.2, top + hb + 1);
-  // Sortides i el tram més llarg sense cap, passats a la distància nedada.
+  doc.setDrawColor(...LINE); doc.setLineWidth(0.15);
+  for (const k of clockTicks(R, info.tick)) doc.line(x(k.d), pTop, x(k.d), pBot);
+  font(6.2, 'bold', WAVE); text('Onada (m)', X0 + 2.6, pBot - ph / 2, { angle: 90, align: 'center' });
+  font(6.2, 'bold', WIND); text('Vent (km/h)', X0 + W - 1.2, pBot - ph / 2, { angle: -90, align: 'center' });
+
+  // Franja de la nota (semàfor)
+  font(5.8, 'normal', MUTED); text('nota', px0 - 1.6, yNote + 2.1, { align: 'right' });
+  S.forEach((s, i) => {
+    const a = i ? (S[i - 1].d + s.d) / 2 : 0, b = i < S.length - 1 ? (s.d + S[i + 1].d) / 2 : R.length;
+    doc.setFillColor(...rgb(LEVELS[s.a.level].color)); doc.rect(x(a), yNote, Math.max(0.2, x(b) - x(a) + 0.05), 2.8, 'F');
+  });
+
+  // Onada: àrea i línia
+  const pts = S.map((s) => [x(s.d), yH(s.a.beachHs)]);
+  doc.setFillColor(...WAVEF);
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    doc.triangle(ax, pBot, bx, pBot, bx, by, 'F'); doc.triangle(ax, pBot, ax, ay, bx, by, 'F');
+  }
+  doc.setDrawColor(...WAVE); doc.setLineWidth(0.7);
+  for (let i = 1; i < pts.length; i++) doc.line(...pts[i - 1], ...pts[i]);
+  // Vent i ratxes
+  doc.setDrawColor(...GUST); doc.setLineWidth(0.45); doc.setLineDashPattern([0.8, 0.7], 0);
+  for (let i = 1; i < S.length; i++) if (S[i - 1].h.gust != null && S[i].h.gust != null) doc.line(x(S[i - 1].d), yW(S[i - 1].h.gust), x(S[i].d), yW(S[i].h.gust));
+  doc.setLineDashPattern([], 0);
+  doc.setDrawColor(...WIND); doc.setLineWidth(0.65);
+  for (let i = 1; i < S.length; i++) if (S[i - 1].h.wind != null && S[i].h.wind != null) doc.line(x(S[i - 1].d), yW(S[i - 1].h.wind), x(S[i].d), yW(S[i].h.wind));
+  // Màxims, amb el valor i l'hora
+  const top = (f) => S.reduce((b, s) => ((f(s) ?? -1) > (f(b) ?? -1) ? s : b), S[0]);
+  const hMax = top((s) => s.a.beachHs), wMax = top((s) => s.h.wind);
+  const marks = [];
+  const mark = (xx, yy, s, col) => {
+    doc.setFillColor(...col); doc.circle(xx, yy, 0.8, 'F');
+    font(6.2, 'bold', col);
+    const tw = doc.getTextWidth(T(s)) + 1.6;
+    let bx = Math.min(px1 - tw, Math.max(px0, xx - tw / 2)), byy = Math.max(pTop + 0.3, yy - 4.4);
+    // Si topa amb l'altra etiqueta, a sota del punt.
+    if (marks.some((m) => bx < m[0] + m[2] && m[0] < bx + tw && Math.abs(byy - m[1]) < 3.4)) byy = Math.min(pBot - 3.5, yy + 1.4);
+    marks.push([bx, byy, tw]);
+    doc.setFillColor(255, 255, 255); doc.roundedRect(bx, byy, tw, 3.2, 0.6, 0.6, 'F');
+    text(s, bx + 0.8, byy + 2.35);
+  };
+  mark(x(hMax.d), yH(hMax.a.beachHs), `màx. ${nf1(hMax.a.beachHs ?? 0)} m a les ${hhmm(hMax.t)}`, WAVE);
+  if (wMax.h.wind != null) mark(x(wMax.d), yW(wMax.h.wind), `màx. ${Math.round(wMax.h.wind)} km/h a les ${hhmm(wMax.t)}`, WIND);
+  doc.setDrawColor(...MUTED); doc.setLineWidth(0.3); doc.line(px0, pBot, px1, pBot); doc.line(px0, pTop, px0, pBot); doc.line(px1, pTop, px1, pBot);
+
+  // Sortides i el tram més llarg sense sortida
+  font(5.8, 'normal', MUTED); text('sortides', px0 - 1.6, yExit + 2.1, { align: 'right' });
   const Ld = R.drawLen;
   const seqD = (along) => (R.back ? [along, 2 * Ld - along] : [R.reverse ? Ld - along : along]);
   if (R.gap?.len >= 600) {
     const a = seqD(R.gap.from), b = seqD(R.gap.to);
     const spans = R.back ? (R.gap.deadEnd ? [[a[0], a[1]]] : [[a[0], b[0]], [b[1], a[1]]]) : [[Math.min(a[0], b[0]), Math.max(a[0], b[0])]];
-    doc.setFillColor(255, 190, 120);
-    for (const [p, q] of spans) doc.roundedRect(x(Math.min(p, q)), yX, Math.abs(x(q) - x(p)), 2.4, 0.6, 0.6, 'F');
+    doc.setFillColor(255, 200, 140);
+    for (const [p, q] of spans) doc.roundedRect(x(Math.min(p, q)), yExit, Math.abs(x(q) - x(p)), 2.6, 0.5, 0.5, 'F');
   }
   doc.setFillColor(31, 157, 85);
-  for (const e of R.exits ?? []) for (const d of seqD(e.along)) doc.rect(x(d) - 0.45, yX - 0.4, 0.9, 3.2, 'F');
-  font(6.5, 'normal', MUTED);
-  text('esforç', lx - 1.5, yE + 2, { align: 'right' });
-  text('sortides', lx - 1.5, yX + 2, { align: 'right' });
-  // Hores cada 20 min
-  let next = R.start;
-  font(7, 'normal', INK);
+  for (const e of R.exits ?? []) for (const d of seqD(e.along)) doc.rect(x(d) - 0.4, yExit - 0.3, 0.8, 3.2, 'F');
+
+  // Eix X: hora de pas (a dalt) i km nedats (a sota)
   doc.setDrawColor(...MUTED); doc.setLineWidth(0.2);
-  for (const s of S) {
-    if (s.t < next) continue;
-    while (next <= s.t) next += 20 * 60;
-    doc.line(x(s.d), yT - 2.6, x(s.d), yT - 1.4);
-    text(hhmm(s.t), Math.min(lx + w - 4, Math.max(lx + 4, x(s.d))), yT + 1.2, { align: 'center' });
+  for (const k of clockTicks(R, info.tick)) {
+    const xx = x(k.d);
+    doc.line(xx, pBot, xx, pBot + 1.2);
+    const cx = Math.min(px1 - 3.5, Math.max(px0 + 3.5, xx));
+    font(6.5, 'bold', INK); text(hhmm(k.t), cx, yTime, { align: 'center' });
+    font(5.7, 'normal', MUTED); text(`${nf1(k.d / 1000)} km`, cx, yTime + 2.7, { align: 'center' });
   }
-  font(6.5, 'normal', MUTED);
-  text(fmtDist(R.length), lx + w, yT + 5, { align: 'right' });
+  font(6, 'normal', MUTED);
+  text('hora', px0 - 1.6, yTime, { align: 'right' }); text('km', px0 - 1.6, yTime + 2.7, { align: 'right' });
+  text(`Hora de pas i distància nedada · ${R.back ? 'tornada' : 'arribada'} a les ${hhmm(R.end)}, ${fmtDist(R.length)} en total`, X0 + W / 2, yTime + 6, { align: 'center' });
 }
 
 /** Desa el PDF (ordinador) o el deixa a punt per compartir (mòbil): `share()` necessita un toc de l'usuari. */
