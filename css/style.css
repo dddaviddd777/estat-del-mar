@@ -150,3 +150,18 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   .sheet-msg { background: #3a3218; color: #f3dfa2; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } .draw { stroke-dashoffset: 0; } }
+
+/* Suggeriment d'instal·lar l'app al mòbil (js/install.js). */
+.install-tip { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 1500;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; color: #fff;
+  background: rgba(11, 29, 44, .94); border: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: it-in .35s ease-out; max-width: 520px; margin: 0 auto; }
+.install-tip img { width: 40px; height: 40px; border-radius: 10px; flex: none; }
+.install-tip .it-txt { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; }
+.install-tip .it-txt b { display: block; font-size: 14px; }
+.install-tip .it-txt span { opacity: .85; }
+.install-tip .it-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.install-tip button { border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; background: rgba(255, 255, 255, .12); }
+.install-tip .it-go { background: #2f9be0; }
+@keyframes it-in { from { transform: translateY(20px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .install-tip { animation: none; } }

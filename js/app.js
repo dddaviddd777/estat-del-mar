@@ -1,6 +1,7 @@
 import { BEACHES, TZ, waveLevel, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore, roughBefore } from './marine.js';
 import * as store from './store.js';
+import { initInstall } from './install.js';
 import { initLayers, setLayersTime, GRID_BOUNDS } from './layers.js';
 import { initMapPanel, showKind } from './mappanel.js';
 import { initPlaces, loadPlaces, waterAlert, waterAlertText, placesNear, outfallText, OUTFALL_ICO } from './places.js';
@@ -1252,6 +1253,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+initInstall();
 
 load();
 
