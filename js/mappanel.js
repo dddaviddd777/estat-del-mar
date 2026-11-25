@@ -171,20 +171,23 @@ export function initMapPanel(m, o = {}) {
     },
   });
   new Ctl({ position: 'topleft' }).addTo(map);
-  // Sota el botó del panell: platges (un toc les amaga o les ensenya) i la mira central.
+  // Sota el botó del panell: platges (un toc les amaga o les ensenya) i la mira central. Cada un és un control a part,
+  // perquè quedin separats com la resta de botons de la columna (l'usuari, 25/11/2026).
+  ui.quick = {};
   const Quick = L.Control.extend({
     onAdd() {
+      const { q, ico, act } = this.options;
       const el = L.DomUtil.create('div', 'leaflet-bar quick-ctl');
-      el.innerHTML = `<a href="#" role="button" data-q="beaches">${BEACHES_BTN}</a><a href="#" role="button" data-q="center">${CENTER_BTN}</a>`;
+      el.innerHTML = `<a href="#" role="button" data-q="${q}">${ico}</a>`;
       L.DomEvent.disableClickPropagation(el);
       L.DomEvent.disableScrollPropagation(el);
-      ui.quick = Object.fromEntries([...el.querySelectorAll('[data-q]')].map((a) => [a.dataset.q, a]));
-      L.DomEvent.on(ui.quick.beaches, 'click', (e) => { L.DomEvent.preventDefault(e); show.platges = !show.platges; apply(); });
-      L.DomEvent.on(ui.quick.center, 'click', (e) => { L.DomEvent.preventDefault(e); setCenterRead(!centerOn()); renderPanel(); });
+      ui.quick[q] = el.firstElementChild;
+      L.DomEvent.on(ui.quick[q], 'click', (e) => { L.DomEvent.preventDefault(e); act(); });
       return el;
     },
   });
-  new Quick({ position: 'topleft' }).addTo(map);
+  new Quick({ position: 'topleft', q: 'beaches', ico: BEACHES_BTN, act: () => { show.platges = !show.platges; apply(); } }).addTo(map);
+  new Quick({ position: 'topleft', q: 'center', ico: CENTER_BTN, act: () => { setCenterRead(!centerOn()); renderPanel(); } }).addTo(map);
   map.on('click', () => { if (!ui.panel.hidden) openPanel(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ui.panel.hidden) openPanel(false); });
   apply();
