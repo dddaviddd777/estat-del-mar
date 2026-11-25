@@ -34,20 +34,57 @@ function png(size, rgba) {
   ]);
 }
 
-// Escena en coordenades 0..1. Retorna [r,g,b,a] per a un punt: sol sobre el mar amb ones.
+// Logo «Ona i vent» (proposta A, triada per l'usuari el 25/11/2026: sense sol, colors del mar, minimalista): fons blau
+// marí, una ratxa de vent que s'enrotlla i una línia curta a sota, i dues ones (blanca i blava). Coordenades 0..100,
+// com l'SVG de la proposta; cada traç és una polilínia amb gruix (extrems arrodonits).
+const BG = [15, 53, 86];
+const cubic = (p0, p1, p2, p3, n = 24) => Array.from({ length: n + 1 }, (_, i) => {
+  const t = i / n, s = 1 - t;
+  return [0, 1].map((k) => s * s * s * p0[k] + 3 * s * s * t * p1[k] + 3 * s * t * t * p2[k] + t * t * t * p3[k]);
+});
+const arc = (cx, cy, r, a0, a1, n = 48) => Array.from({ length: n + 1 }, (_, i) => {
+  const a = ((a0 + (a1 - a0) * i / n) * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+});
+// Ona: quatre corbes de 18 unitats d'ample i 9 d'alt (com «c9 0 11-9 18-9 s9 9 18 9…»).
+function wave(x0, y0) {
+  const pts = [];
+  for (let k = 0; k < 4; k++) {
+    const x = x0 + 18 * k, up = k % 2 === 0;
+    const a = [x, up ? y0 : y0 - 9], b = [x + 18, up ? y0 - 9 : y0];
+    const seg = up ? cubic(a, [x + 9, y0], [x + 11, y0 - 9], b) : cubic(a, [x + 7, y0 - 9], [x + 9, y0], b);
+    pts.push(...(k ? seg.slice(1) : seg));
+  }
+  return pts;
+}
+const STROKES = [
+  // Ratxa: recta i, al final, un rínxol de 270° (cercle de radi 8 centrat a 58,23).
+  { pts: [[20, 31], [58, 31], ...arc(58, 23, 8, 90, -180).slice(1)], w: 5, col: [159, 216, 245] },
+  { pts: [[20, 43], [42, 43]], w: 5, col: [159, 216, 245] },
+  { pts: wave(14, 64), w: 7, col: [255, 255, 255] },
+  { pts: wave(14, 80), w: 7, col: [47, 155, 224] },
+].map((s) => ({ ...s, box: [Math.min(...s.pts.map((p) => p[0])) - s.w, Math.min(...s.pts.map((p) => p[1])) - s.w,
+  Math.max(...s.pts.map((p) => p[0])) + s.w, Math.max(...s.pts.map((p) => p[1])) + s.w] }));
+function near(s, u, v) {
+  if (u < s.box[0] || v < s.box[1] || u > s.box[2] || v > s.box[3]) return false;
+  const r2 = (s.w / 2) ** 2;
+  for (let i = 1; i < s.pts.length; i++) {
+    const [ax, ay] = s.pts[i - 1], [bx, by] = s.pts[i], dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((u - ax) * dx + (v - ay) * dy) / (dx * dx + dy * dy || 1)));
+    if ((u - ax - t * dx) ** 2 + (v - ay - t * dy) ** 2 <= r2) return true;
+  }
+  return false;
+}
+
+// Escena en coordenades 0..1. Retorna [r,g,b,a] per a un punt. `scale` encongeix el dibuix (icones «maskable»).
 function scene(x, y, { rounded, scale }) {
   if (rounded) {
     const r = 0.22, cx = Math.min(Math.max(x, r), 1 - r), cy = Math.min(Math.max(y, r), 1 - r);
     if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) return [0, 0, 0, 0];
   }
-  const t = y;
-  let col = [Math.round(15 + (47 - 15) * t), Math.round(53 + (120 - 53) * t), Math.round(86 + (168 - 86) * t), 255];
-  const u = (x - 0.5) / scale + 0.5, v = (y - 0.5) / scale + 0.5;
-  if ((u - 0.66) ** 2 + (v - 0.32) ** 2 <= 0.14 ** 2) col = [255, 201, 60, 255]; // sol
-  // ones: franges sinusoidals
-  const wave = (y0, amp, th) => Math.abs(v - (y0 + amp * Math.sin((u - 0.1) * Math.PI * 4))) <= th && u > 0.12 && u < 0.88;
-  if (wave(0.56, 0.035, 0.035)) col = [255, 255, 255, 255];
-  if (wave(0.72, 0.035, 0.035)) col = [168, 220, 255, 255];
+  const u = ((x - 0.5) / scale + 0.5) * 100, v = ((y - 0.5) / scale + 0.5) * 100;
+  let col = [...BG, 255];
+  for (const s of STROKES) if (near(s, u, v)) col = [...s.col, 255];
   return col;
 }
 
