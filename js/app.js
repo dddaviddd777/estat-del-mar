@@ -1,7 +1,7 @@
 import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore } from './marine.js';
 import * as store from './store.js';
-import { initLayers, setLayersTime } from './layers.js';
+import { initLayers, setLayersTime, GRID_BOUNDS } from './layers.js';
 import { initMapPanel, showKind } from './mappanel.js';
 import { initPlaces, loadPlaces, riverAlert } from './places.js';
 import { initServices, loadServices, servicesHtml } from './services.js';
@@ -107,9 +107,9 @@ function renderTime() {
   $('timeLabel').textContent = `${dayLabel(t)} · ${hhmm(t)}`;
   if (map) setLayersTime(t);
   renderChips();
+  renderAlerts(); // abans de les etiquetes: n'han d'esquivar el bàner
   renderMarkers();
   renderList();
-  renderAlerts();
 }
 
 // ---------- Avisos de temps ----------
@@ -141,8 +141,25 @@ function renderAlerts() {
   if (riv?.beaches.length > 1) riv.text = `Ha plogut força les últimes 48 hores: prop de les desembocadures de rius i rieres l'aigua pot estar tèrbola i bruta durant un o dos dies.`;
   const list = [...byKind.values()].sort((a, b) => (a.level === 'perill' ? 0 : 1) - (b.level === 'perill' ? 0 : 1) || a.t - b.t);
   list.forEach((a) => { if (a.beaches.length < BEACHES.length * 0.6) a.where = `(${a.beaches.slice(0, 3).join(', ')}${a.beaches.length > 3 ? '…' : ''})`; });
-  $('alerts').hidden = !list.length;
-  $('alerts').innerHTML = alertsHtml(list);
+  const el = $('alerts');
+  el.hidden = !list.length;
+  if (!list.length) { el.innerHTML = ''; return; }
+  const a = list[0], lv = (x) => (x.level === 'perill' ? 'Perill' : 'Atenció');
+  el.classList.toggle('perill', list.some((x) => x.level === 'perill'));
+  el.innerHTML = `<button class="wx-pill" type="button" aria-expanded="${el.classList.contains('open')}" title="Avisos de temps">${WARN_ICO}<span class="wx-long"><b>${lv(a)}:</b> ${a.text.split(/:\s|\.\s|\.$/)[0]}</span>${list.length > 1 ? `<em>+${list.length - 1}</em>` : ''}<span class="wx-short"><b>${list.length > 1 ? `${list.length} avisos` : lv(a)}</b></span><i class="wx-chev"></i></button>
+    <div class="wx-more">${alertsHtml(list)}</div>`;
+}
+// Bàner discret dins del mapa (l'usuari, 25/11/2026: els avisos no han de prendre lloc al mapa). Una línia amb el primer
+// avís; un toc el desplega amb tots els avisos i els enllaços del radar. Amb el mapa a tota la pantalla no surt.
+const WARN_ICO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z" fill="currentColor"/><path d="M12 9.5v5" stroke="#0b1d2c" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.2" fill="#0b1d2c"/></svg>';
+function initAlertsBanner() {
+  const el = L.DomUtil.create('div', 'wx-map', map.getContainer());
+  el.id = 'alerts'; el.hidden = true; el.setAttribute('role', 'status');
+  L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);
+  el.addEventListener('contextmenu', (e) => e.stopPropagation());
+  const setOpen = (on) => { el.classList.toggle('open', on); el.querySelector('.wx-pill')?.setAttribute('aria-expanded', String(on)); };
+  el.addEventListener('click', (e) => { if (e.target.closest('.wx-pill')) setOpen(!el.classList.contains('open')); });
+  map.on('click movestart', () => setOpen(false));
 }
 
 // Botons ràpids: ara, demà a les 9 h i demà passat a les 9 h (l'hora habitual de nedar).
@@ -210,6 +227,12 @@ function initMap() {
   // Les etiquetes surten cap a la dreta (mar): deixem-hi lloc perquè les de més a l'est no quedin tallades.
   const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))),
     wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [170, 24] });
+  // No es pot allunyar més enllà de la zona de les capes (l'usuari, 25/11/2026: amb el zoom molt allunyat el vent no
+  // cobria el mapa i les etiquetes quedaven mal posades). El zoom mínim depèn de la mida del mapa.
+  const gridB = L.latLngBounds(GRID_BOUNDS);
+  map.setMaxBounds(gridB); map.options.maxBoundsViscosity = 1;
+  const limitZoom = () => { if (map.getSize().x > 100) map.setMinZoom(map.getBoundsZoom(gridB, true)); };
+  limitZoom();
   fitCoast();
   // En passar de mòbil a ordinador (o al revés) el mapa canvia molt de mida: el tornem a encaixar.
   wide.addEventListener('change', () => { map.scrollWheelZoom[wide.matches ? 'enable' : 'disable'](); setTimeout(() => { map.invalidateSize(); fitCoast(); }, 50); });
@@ -217,6 +240,7 @@ function initMap() {
   let hadSize = map.getSize().x > 100;
   new ResizeObserver(() => {
     map.invalidateSize();
+    limitZoom();
     if (!hadSize && map.getSize().x > 100) { hadSize = true; fitCoast(); }
   }).observe($('map'));
   for (const b of BEACHES) {
@@ -243,6 +267,7 @@ function initMap() {
   map.on('movestart zoomstart', closeCtxMenu);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtxMenu(); });
   initMaximize();
+  initAlertsBanner();
   restorePts();
 }
 
@@ -394,7 +419,8 @@ function layoutLabels() {
   // Platges i punts propis: les etiquetes dels punts (a la dreta del punt, o a l'esquerra si no hi caben) també compten.
   const list = [...BEACHES, ...[...pts.values()].map((q) => q.b)].map((b) => ({ b, p: map.latLngToContainerPoint(seaPoint(b)) }));
   const inView = (p) => p.x > -20 && p.x < size.x + 20 && p.y > -20 && p.y < size.y + 20;
-  Object.assign(lbl, labelMode(list.filter((a) => inView(a.p)).map((a) => a.p.y), size.y));
+  const wxH = $('alerts') && !$('alerts').hidden ? 44 : 0; // el bàner dels avisos ocupa la franja de dalt
+  Object.assign(lbl, labelMode(list.filter((a) => inView(a.p)).map((a) => a.p.y), size.y - wxH));
   const H = PILL_H * lbl.s, r = H / 2, LEAD = 12 * lbl.s; // el cercle surt una mica cap al mar des del punt de la platja
   const all = list.map(({ b, p }) => {
     const f = ((b.custom ? 90 : b.facing) * Math.PI) / 180;
@@ -410,10 +436,12 @@ function layoutLabels() {
   const sstEl = $('sstBox'), mapBox = map.getContainer().getBoundingClientRect();
   const sb = sstEl && !sstEl.hidden ? sstEl.getBoundingClientRect() : null;
   const box = sb && sb.width ? { l: sb.left - mapBox.left - 4, r: sb.right - mapBox.left + 4, t: sb.top - mapBox.top - 4, b: sb.bottom - mapBox.top + 4 } : null;
-  const dodgeBox = (A) => {
-    const q = rect(A);
-    if (box && q.r > box.l && q.l < box.r && q.b > box.t && q.t < box.b) A.x = box.r + r;
-  };
+  // El bàner dels avisos (dalt, al costat del requadre): les etiquetes que hi cauen, a sota.
+  const wb = !$('alerts')?.hidden ? $('alerts').querySelector('.wx-pill')?.getBoundingClientRect() : null;
+  const wbox = wb && wb.width ? { l: wb.left - mapBox.left - 4, r: wb.right - mapBox.left + 4, t: wb.top - mapBox.top - 4, b: wb.bottom - mapBox.top + 4 } : null;
+  const hit = (q, B) => B && q.r > B.l && q.l < B.r && q.b > B.t && q.t < B.b;
+  const dodgeSst = (A) => { if (hit(rect(A), box)) A.x = box.r + r; };
+  const dodgeBox = (A) => { dodgeSst(A); if (hit(rect(A), wbox)) A.y = wbox.b + r; };
   for (let k = 0; k < 260; k++) {
     if (k < 200) for (const a of items) { a.x += (a.d.x - a.x) * 0.04; a.y += (a.d.y - a.y) * 0.04; }
     for (let i = 0; i < items.length; i++) {
@@ -438,6 +466,7 @@ function layoutLabels() {
   const hOverlap = (A, B) => Math.min(rect(A).r, rect(B).r) - Math.max(rect(A).l, rect(B).l) + GAP > 0;
   const sorted = [...items].sort((a, b) => a.y - b.y);
   sorted.forEach((B, i) => {
+    dodgeBox(B);
     for (const A of sorted.slice(0, i)) if (hOverlap(A, B) && B.y < A.y + H + GAP) B.y = A.y + H + GAP;
   });
   // I si la de baix surt del mapa, pugem la columna.
@@ -447,7 +476,7 @@ function layoutLabels() {
     if (B.y > bottom) B.y = bottom;
     for (const C of sorted.slice(i + 1)) if (hOverlap(B, C) && B.y > C.y - H - GAP) B.y = C.y - H - GAP;
   }
-  for (const B of sorted) { dodgeBox(B); B.x = Math.min(B.x, size.x - B.w + r - 4); }
+  for (const B of sorted) { dodgeSst(B); B.x = Math.min(B.x, size.x - B.w + r - 4); }
   return Object.fromEntries(all.map((a) => [a.id, { dx: a.x - a.p.x, dy: a.y - a.p.y }]));
 }
 
@@ -664,10 +693,83 @@ function pointBlock(b) {
   </div>`;
 }
 
-function sortedBeaches() {
-  const favs = store.get('favBeaches', []);
-  return [...BEACHES].sort((x, y) => (favs.includes(y.id) - favs.includes(x.id)) || (BEACHES.indexOf(x) - BEACHES.indexOf(y)));
+// ---------- Ordre de la llista (l'usuari, 25/11/2026) ----------
+// De nord a sud (les preferides a dalt), de millor a pitjor nota a l'hora triada (canvia amb la barra de temps) o
+// en l'ordre que triï l'usuari (clau `beachOrder`, s'ordena arrossegant la nansa de cada fila).
+const ORDERS = [['costa', 'Nord-sud'], ['nota', 'Millors primer'], ['meu', 'El meu ordre']];
+let editingOrder = false, drag = null;
+const listOrder = () => { const o = store.get('listOrder', 'costa'); return ORDERS.some(([k]) => k === o) ? o : 'costa'; };
+function customOrder() {
+  const ids = BEACHES.map((b) => b.id);
+  const saved = store.get('beachOrder', []).filter((id) => ids.includes(id));
+  return [...saved, ...ids.filter((id) => !saved.includes(id))]; // si mai s'afegeix una platja, va al final
 }
+const scoreAt = (b) => { const h = data?.beaches[b.id]?.[idx]; return h ? analyze(b, h).score : -1; };
+function sortedBeaches() {
+  const o = listOrder(), pos = (b) => BEACHES.indexOf(b);
+  if (o === 'meu') { const ord = customOrder(); return [...BEACHES].sort((x, y) => ord.indexOf(x.id) - ord.indexOf(y.id)); }
+  if (o === 'nota') return BEACHES.map((b) => [b, scoreAt(b)]).sort((p, q) => q[1] - p[1] || pos(p[0]) - pos(q[0])).map(([b]) => b);
+  const favs = store.get('favBeaches', []);
+  return [...BEACHES].sort((x, y) => (favs.includes(y.id) - favs.includes(x.id)) || (pos(x) - pos(y)));
+}
+function renderSortBar() {
+  const o = listOrder();
+  $('sortSeg').innerHTML = ORDERS.map(([k, t]) => `<button type="button" data-order="${k}" aria-pressed="${k === o}" class="${k === o ? 'on' : ''}">${t}</button>`).join('');
+  $('sortEdit').hidden = o !== 'meu';
+  $('sortEdit').textContent = editingOrder ? 'Fet' : "Canvia l'ordre";
+  $('sortEdit').classList.toggle('on', editingOrder);
+}
+function setOrder(o) {
+  // La primera vegada que es tria «El meu ordre», es comença a editar (partint de nord a sud).
+  editingOrder = o === 'meu' && (listOrder() === 'meu' ? editingOrder : !store.get('beachOrder', []).length);
+  store.set('listOrder', o);
+  renderList();
+}
+function saveOrderFromDom() {
+  store.set('beachOrder', [...$('beaches').querySelectorAll('li[data-id]')].map((li) => li.dataset.id));
+}
+$('sortSeg').addEventListener('click', (e) => { const btn = e.target.closest('[data-order]'); if (btn) setOrder(btn.dataset.order); });
+$('sortEdit').addEventListener('click', () => { editingOrder = !editingOrder; renderList(); });
+// Arrossegar la nansa (ratolí o dit): es mouen les veïnes, no la fila agafada, perquè no perdi el punter.
+$('beaches').addEventListener('pointerdown', (e) => {
+  const g = e.target.closest('[data-grip]');
+  if (!g) return;
+  e.preventDefault();
+  const li = g.closest('li');
+  g.setPointerCapture(e.pointerId);
+  drag = { li, y0: e.clientY };
+  li.classList.add('dragging');
+});
+$('beaches').addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const { li } = drag;
+  for (let k = 0; k < 40; k++) { // un moviment ràpid pot passar per sobre de diverses files
+    const next = li.nextElementSibling, prev = li.previousElementSibling, dy = e.clientY - drag.y0;
+    if (next && dy > next.offsetHeight / 2) { li.before(next); drag.y0 += next.offsetHeight; }
+    else if (prev?.dataset.id && dy < -prev.offsetHeight / 2) { li.after(prev); drag.y0 -= prev.offsetHeight; }
+    else break;
+  }
+  li.style.transform = `translateY(${e.clientY - drag.y0}px)`;
+});
+const endDrag = () => {
+  if (!drag) return;
+  drag.li.classList.remove('dragging'); drag.li.style.transform = '';
+  drag = null;
+  saveOrderFromDom();
+};
+$('beaches').addEventListener('pointerup', endDrag);
+$('beaches').addEventListener('pointercancel', endDrag);
+// Amb el teclat: fletxes amunt i avall sobre la nansa.
+$('beaches').addEventListener('keydown', (e) => {
+  const g = e.target.closest('[data-grip]');
+  if (!g || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault();
+  const li = g.closest('li'), other = e.key === 'ArrowUp' ? li.previousElementSibling : li.nextElementSibling;
+  if (!other?.dataset.id) return;
+  if (e.key === 'ArrowUp') other.before(li); else other.after(li);
+  saveOrderFromDom();
+  g.focus();
+});
 
 function bestOf(b) {
   const hours = hoursOf(b);
@@ -678,7 +780,14 @@ function bestOf(b) {
 }
 
 function renderList() {
-  const favs = store.get('favBeaches', []);
+  if (drag) return; // no es repinta mentre s'arrossega una fila
+  renderSortBar();
+  const favs = store.get('favBeaches', []), order = listOrder(), byScore = order === 'nota', editing = order === 'meu' && editingOrder;
+  // Ordenades per nota, les files llisquen al seu lloc nou quan canvia l'hora.
+  const before = new Map();
+  if (byScore) for (const li of $('beaches').querySelectorAll('li[data-id]')) before.set(li.dataset.id, li.getBoundingClientRect().top);
+  $('beaches').classList.toggle('by-score', byScore);
+  $('beaches').classList.toggle('editing', editing);
   // Els punts desats, a dalt de tot (són llocs que l'usuari ha triat).
   const mine = savedPts().map(({ b, hours, err }) => {
     const h = hours?.[idx];
@@ -695,20 +804,30 @@ function renderList() {
       <span class="mine-tag" aria-hidden="true">${PIN_SVG}</span>
     </li>`;
   }).join('');
-  $('beaches').innerHTML = mine + sortedBeaches().map((b) => {
+  $('beaches').innerHTML = (editing ? '' : mine) + sortedBeaches().map((b) => {
     const h = data.beaches[b.id][idx];
     const a = analyze(b, h);
     const best = bestOf(b);
     const bestTxt = best ? `<span class="best"><i class="dot-s" style="color:${LEVELS[best.w.level].color}">●</i> Millor ${best.label} ${winText(best.w)}</span>` : '';
-    return `<li>
+    if (editing) return `<li data-id="${b.id}" class="edit">
+      <span class="brow"><i class="dot" style="background:${LEVELS[a.level].color}"></i><span class="bname">${b.name}<small>${b.town}</small></span></span>
+      <button class="grip" type="button" data-grip aria-label="Mou ${b.name} (fletxes amunt i avall)" title="Arrossega per canviar l'ordre"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg></button>
+    </li>`;
+    return `<li data-id="${b.id}">
       <button class="brow" data-b="${b.id}">
-        <i class="dot" style="background:${LEVELS[a.level].color}"></i>
+        ${byScore ? `<i class="dot sc-dot" style="background:${LEVELS[a.level].color}">${a.score >= 9.95 ? '10' : nf1.format(a.score)}</i>` : `<i class="dot" style="background:${LEVELS[a.level].color}"></i>`}
         <span class="bname">${b.name}<small>${bestTxt || b.town}</small></span>
         <span class="bvals">${m(a.beachHs)} m<small>${h.wind == null ? '—' : Math.round(h.wind)} km/h ${REL[a.rel]}</small></span>
       </button>
       <button class="star ${favs.includes(b.id) ? 'on' : ''}" data-star="${b.id}" aria-label="${favs.includes(b.id) ? 'Treure de preferides' : 'Marcar com a preferida'}: ${b.name}">${starSvg(favs.includes(b.id))}</button>
     </li>`;
   }).join('');
+  if (before.size && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const li of $('beaches').querySelectorAll('li[data-id]')) {
+      const t0 = before.get(li.dataset.id), d = t0 == null ? 0 : t0 - li.getBoundingClientRect().top;
+      if (Math.abs(d) > 1) li.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: 300, easing: 'ease-out' });
+    }
+  }
 }
 
 const PIN_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';

@@ -86,6 +86,20 @@ a.icon-btn { color: inherit; text-decoration: none; }
 .bvals { text-align: right; font-size: 15px; white-space: nowrap; }
 .star { width: 38px; height: 38px; display: grid; place-items: center; color: var(--faint); flex: none; }
 .star.on { color: #ffd34d; }
+/* Ordre de la llista: Nord-sud / Millors primer / El meu ordre */
+.sortbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; margin: -2px 0 6px; }
+.seg { display: inline-flex; padding: 2px; border-radius: 12px; background: rgba(255, 255, 255, .1); }
+.seg button { font-size: 12.5px; padding: 4px 10px; border-radius: 10px; color: var(--soft); white-space: nowrap; }
+.seg button.on { background: #fff; color: #0f3556; font-weight: 500; }
+.sort-edit { font-size: 12.5px; padding: 4px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .3); color: #fff; }
+.sort-edit.on { background: #3fc1c9; border-color: #3fc1c9; color: #0b1d2c; font-weight: 500; }
+.beaches.by-score .brow { grid-template-columns: 28px 1fr auto; }
+.brow .dot.sc-dot { width: 28px; height: 28px; display: grid; place-items: center; font: 600 11.5px/1 Outfit, system-ui, sans-serif; font-style: normal; color: #0b1d2c; }
+.beaches li.edit .brow { cursor: default; }
+.beaches li.dragging { position: relative; z-index: 2; background: #1d4a72; border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.grip { width: 44px; height: 44px; display: grid; place-items: center; color: #a8dcff; flex: none; cursor: grab; touch-action: none; }
+.grip:active { cursor: grabbing; }
+
 /* Punts desats a la llista */
 .beaches .mine .bname { font-weight: 500; }
 .brow .dot.pin { border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: inset 0 0 0 1.5px rgba(11, 29, 44, .3); }
@@ -388,7 +402,27 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 @media (max-width: 420px) { .r-kpis { grid-template-columns: repeat(3, 1fr); } .r-trams li { gap: 6px; grid-template-columns: 20px 40px 28px minmax(0, 1fr) auto; } }
 
 /* Avisos de temps (tempesta, front, entrada de vent…) */
-.wx-alerts { margin-top: 8px; }
+/* Bàner dels avisos dins del mapa: una línia a dalt, entre el requadre de l'aigua i el botó de tota la pantalla. */
+.wx-map { container-type: inline-size; position: absolute; z-index: 820; top: 10px; left: 148px; right: 54px; display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; }
+.wx-map[hidden], body.routing .wx-map { display: none; }
+.wx-pill { pointer-events: auto; max-width: min(100%, 320px); display: flex; align-items: center; gap: 6px; padding: 5px 9px 5px 8px; border: 0; border-radius: 999px; cursor: pointer;
+  background: rgba(11, 29, 44, .78); color: #fff; font: 400 12px/1.25 Outfit, system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0, 0, 0, .3); backdrop-filter: blur(3px); }
+.wx-pill:hover { background: rgba(11, 29, 44, .9); }
+.wx-pill svg { width: 15px; height: 15px; flex: none; color: #f5c542; }
+.wx-map.perill .wx-pill svg { color: #ef5b5b; }
+.wx-pill span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-pill b { color: #ffd166; font-weight: 600; }
+.wx-map.perill .wx-pill b { color: #ff8f8f; }
+.wx-pill .wx-short { display: none; white-space: nowrap; }
+/* Al mòbil hi ha poc lloc entre el requadre i el botó: només «Atenció · 2 avisos»; el text, en desplegar-lo. */
+@container (max-width: 250px) { .wx-pill .wx-long, .wx-pill em { display: none; } .wx-pill .wx-short { display: inline; } }
+.wx-pill em { flex: none; font-style: normal; font-size: 11px; opacity: .75; }
+.wx-chev { flex: none; width: 6px; height: 6px; margin: -3px 1px 0 1px; border: solid rgba(255, 255, 255, .8); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); transition: transform .15s; }
+.wx-map.open .wx-chev { transform: rotate(-135deg); margin-top: 3px; }
+.wx-more { display: none; pointer-events: auto; margin: 6px 0 0 -140px; width: min(calc(100% + 140px), 420px); max-height: 60%; overflow: auto; }
+.wx-map.open .wx-more { display: block; }
+.wx-map.open { z-index: 1001; } /* desplegat, per sobre dels controls de Leaflet (el requadre de l'aigua) */
+.wx-map .wx-box { margin: 0; background: rgba(11, 29, 44, .93); color: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .35); }
 .wx-box { background: rgba(245, 197, 66, .16); border: 1px solid rgba(245, 197, 66, .45); border-radius: 12px; padding: 8px 10px; margin: 8px 0; font-size: 13.5px; line-height: 1.45; }
 .wx-box.perill { background: rgba(239, 91, 91, .18); border-color: rgba(239, 91, 91, .6); }
 .wx-box ul { list-style: none; margin: 0; padding: 0; }
@@ -514,5 +548,5 @@ body.map-max .map-card { position: fixed; inset: 0; z-index: 9; margin: 0; max-w
 body.map-max #map { flex: 1; height: auto; min-height: 0; }
 body.map-max .map-card .legend { display: none; }
 body.map-max .timebar { padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
-/* A tota la pantalla, l'avís es queda en la línia important (sense la nota del radar) perquè el mapa tingui més lloc. */
-body.map-max .wx-box > p { display: none; }
+/* A tota la pantalla no hi ha bàner d'avisos (els de la platja i la ruta surten a les fitxes). */
+body.map-max #alerts { display: none; }

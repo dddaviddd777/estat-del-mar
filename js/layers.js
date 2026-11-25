@@ -8,11 +8,13 @@ import { TZ, windName } from './marine.js';
 import { loadCoast, coastInfo, inCoastArea, coastReady } from './coast.js';
 
 // ---------- Graella ----------
-// De Barcelona al golf del Lleó i fins a ~60 km mar endins (tot el que es veu amb el mapa sencer): 13 × 13 punts,
-// cada 10-11 km (els models d'onades tenen cel·les d'uns 8 km).
-const G = { lat0: 41.45, dLat: 0.1, ny: 13, lon0: 2.6, dLon: 0.125, nx: 13 };
+// De Barcelona al golf del Lleó, de Girona fins a ~100 km mar endins: 19 × 13 punts, cada 10-11 km (els models d'onades tenen
+// cel·les d'uns 8 km). És més ampla que alta perquè la costa sencera hi càpiga també a les pantalles apaïsades:
+// el mapa no deixa allunyar-se més enllà d'aquesta zona (GRID_BOUNDS), i així les capes la cobreixen sempre tota.
+const G = { lat0: 41.45, dLat: 0.1, ny: 13, lon0: 2.1, dLon: 0.125, nx: 19 };
 const NP = G.ny * G.nx;
-const GRID_V = 3;
+const GRID_V = 5;
+export const GRID_BOUNDS = [[G.lat0, G.lon0], [G.lat0 + (G.ny - 1) * G.dLat, G.lon0 + (G.nx - 1) * G.dLon]];
 const GRID_KEY = 'mar.grid'; // a part de la resta de dades (fa uns quants centenars de kB)
 const TTL = 60 * 60 * 1000;
 
