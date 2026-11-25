@@ -1,21 +1,21 @@
 {
- "actualitzat": "2026-11-25T11:14:27.856Z",
+ "actualitzat": "2026-11-25T12:22:05.678Z",
  "boies": {
   "begur": {
    "nom": "Cap de Begur",
    "font": "Puertos del Estado",
-   "lat": 41.9034,
+   "lat": 41.9042,
    "lon": 3.6508,
-   "t": 1795604400,
-   "hs": 1.76,
+   "t": 1795608000,
+   "hs": 1.64,
    "dir": 205,
-   "tp": 7.2,
+   "tp": 7.4,
    "sst": 15.9,
    "m": {
-    "main": 0.92,
-    "ecmwf": 1.02,
-    "gfs": 1.04,
-    "dwd": 0.98
+    "main": 1,
+    "ecmwf": 1.06,
+    "gfs": 1.02,
+    "dwd": 0.94
    }
   },
   "creus": {
