@@ -34,7 +34,7 @@ a.icon-btn { color: inherit; text-decoration: none; }
 /* Marcadors del mapa */
 .bm-wrap { background: none; border: 0; }
 .bm { position: relative; width: 0; height: 0; }
-/* Etiqueta: [nota] nom [onada] [vent]. Cada dada amb la seva forma; només la nota porta el color del semàfor. */
+/* Etiqueta: [nota] nom [onada] [vent]. Cada dada amb la seva forma; la nota porta el color del semàfor, i l'onada i el vent, el seu nivell. */
 .bm .pill { position: absolute; display: flex; align-items: center; gap: 5px; height: 32px; padding-right: 4px; border-radius: 16px 8px 8px 16px;
   background: #fff; color: #0b1d2c; white-space: nowrap; cursor: pointer; font: 500 12px Outfit, system-ui, sans-serif;
   box-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
