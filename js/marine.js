@@ -76,7 +76,7 @@ export const WAVE_MODELS = [
   { id: 'gfs', api: 'ncep_gfswave025', name: 'GFS Wave', note: 'EUA · també al Windy' },
   { id: 'dwd', api: 'dwd_ewam', name: 'DWD EWAM', note: 'Alemanya · més fi' },
 ];
-const DATA_VERSION = 6; // apujar-ho si canvia el format de les dades desades
+const DATA_VERSION = 7; // apujar-ho si canvia el format de les dades desades
 
 // ---------- Descàrrega ----------
 export function cachedMarine() {
@@ -119,11 +119,11 @@ export async function fetchMarine({ force = false } = {}) {
   const cached = cachedMarine();
   if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
   const lats = BEACHES.map((b) => b.lat), lons = BEACHES.map((b) => b.lon);
-  const [{ ma, wa, xa }, rain] = await Promise.all([download(lats, lons), fetchRain(lats, lons)]);
+  const [{ ma, wa, xa }, rain, past] = await Promise.all([download(lats, lons), fetchRain(lats, lons), fetchPastSea(lats, lons)]);
   const times = ma[0].hourly.time;
   const beaches = {};
   BEACHES.forEach((b, i) => { beaches[b.id] = toHours(ma[i].hourly, wa[i].hourly, xa?.[i]?.hourly); });
-  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches, rain };
+  const data = { v: DATA_VERSION, fetchedAt: Date.now(), source: 'Open-Meteo Marine + AROME', times, beaches, rain, past };
   store.set('marine', data);
   return data;
 }
@@ -150,6 +150,47 @@ export function rainBefore(data, lat, lon, t, hrs = 48) {
   let sum = 0;
   for (let k = Math.max(0, k1 - hrs); k < k1; k++) sum += s[k];
   return sum;
+}
+
+/**
+ * Onada a cada platja els dos dies d'abans (per a l'avís d'aigua tèrbola després de mala mar): { t0 (s), b: { id: [m] } }.
+ * Només les variables que fa servir seaState. És opcional: si falla, no hi ha avís.
+ */
+const PAST_SEA = ['wave_height', 'wave_direction', 'wave_period', 'wind_wave_height', 'wind_wave_direction', 'wind_wave_period',
+  'wind_wave_peak_period', 'swell_wave_height', 'swell_wave_direction', 'swell_wave_period', 'swell_wave_peak_period'];
+async function fetchPastSea(lats, lons) {
+  try {
+    const r = [].concat(await getJson(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats.join(',')}&longitude=${lons.join(',')}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&past_days=2&forecast_days=1&cell_selection=sea&hourly=${PAST_SEA.join(',')}`));
+    const b = {};
+    BEACHES.forEach((x, i) => {
+      const M = r[i].hourly;
+      b[x.id] = M.time.map((_, k) => {
+        const hb = beachWave(x, { hs: M.wave_height[k], dir: M.wave_direction[k], per: M.wave_period[k],
+          ww: M.wind_wave_height[k], wwDir: M.wind_wave_direction[k], wwPer: M.wind_wave_period[k], wwTp: M.wind_wave_peak_period[k],
+          sw: M.swell_wave_height[k], swDir: M.swell_wave_direction[k], swPer: M.swell_wave_period[k], swTp: M.swell_wave_peak_period[k] });
+        return hb == null ? null : Math.round(hb * 100) / 100;
+      });
+    });
+    return { t0: r[0].hourly.time[0], b };
+  } catch { return null; }
+}
+
+/**
+ * La pitjor onada a la platja més propera les `hrs` hores abans de `t` (sense comptar les 3 últimes) i la de l'hora `t`:
+ * { hs, t, now } o null. Si fa poc hi ha hagut mala mar, la sorra remoguda enterboleix l'aigua un o dos dies.
+ */
+export function roughBefore(data, lat, lon, t, hrs = 48) {
+  if (!data?.beaches) return null;
+  const b = BEACHES.reduce((a, x) => (distKm(lat, lon, x.lat, x.lon) < distKm(lat, lon, a.lat, a.lon) ? x : a));
+  const H = data.beaches[b.id], t0 = data.times[0];
+  const at = (u) => {
+    if (u >= t0) { const h = H?.[Math.round((u - t0) / 3600)]; return h ? beachWave(b, h) : null; }
+    const P = data.past; const s = P?.b?.[b.id];
+    return s ? s[Math.round((u - P.t0) / 3600)] ?? null : null;
+  };
+  let best = null;
+  for (let u = t - hrs * 3600; u <= t - 3 * 3600; u += 3600) { const v = at(u); if (v != null && (!best || v > best.hs)) best = { hs: v, t: u }; }
+  return best && { ...best, now: at(t) };
 }
 
 /**

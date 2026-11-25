@@ -1,11 +1,11 @@
 // Panell «Mapa»: un sol botó (sota el de la ruta) per triar què es veu. Fa alhora de llegenda: cada fila porta la
 // mateixa icona que surt al mapa. Capes del temps (colors: onades, ratxes o pluja; moviment: vent o corrents), llocs
-// (platges, punts, boies, sortides, ports, coves, fars, desembocadures, la ruta) i serveis (bars, dutxes, fonts,
+// (platges, punts, boies, sortides, ports, coves, fars, desembocadures, emissaris, la ruta) i serveis (bars, dutxes, fonts,
 // lavabos, pàrquings, socorristes), amb tres botons ràpids. Es recorda a `mapShow` (les capes, a `mapLayers`).
 import * as store from './store.js';
 import { setLayer, layersOn, WAVE_STOPS, GUST_STOPS, RAIN_STOPS, CUR_STOPS } from './layers.js';
 import { setExitKinds, setRouteShown, EXIT_ICO, PORT_ICO } from './routeui.js';
-import { setPlaceKinds, CAVE_ICO, LIGHT_ICO, RIVER_ICO } from './places.js';
+import { setPlaceKinds, CAVE_ICO, LIGHT_ICO, RIVER_ICO, OUTFALL_ICO } from './places.js';
 import { setServiceKinds, SERVICE_TYPES, SERVICE_KINDS } from './services.js';
 
 const ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="m2.5 12.5 9.5 5 9.5-5"/><path d="m2.5 17 9.5 5 9.5-5"/></svg>';
@@ -24,6 +24,7 @@ const PLACES = [
   { k: 'coves', name: 'Coves', sub: 'de mar · de prop' },
   { k: 'fars', name: 'Fars' },
   { k: 'rius', name: 'Desembocadures', sub: 'rius i rieres · aigua tèrbola després de pluja' },
+  { k: 'emissaris', name: 'Emissaris', sub: 'de les depuradores · on aboquen (ACA)' },
   { k: 'ruta', name: 'La meva ruta' },
 ];
 // Noms curts dels serveis per als botons del panell.
@@ -73,7 +74,7 @@ function apply() {
   b.toggle('hide-punts', !show.punts);
   b.toggle('hide-boies', !show.boies);
   setExitKinds({ sortides: show.sortides, ports: show.ports });
-  setPlaceKinds({ cova: show.coves, far: show.fars, riu: show.rius });
+  setPlaceKinds({ cova: show.coves, far: show.fars, riu: show.rius, emissari: show.emissaris });
   setServiceKinds(Object.fromEntries(SERVICE_KINDS.map((k) => [k, !!show[`svc_${k}`]])));
   setRouteShown(show.ruta);
   store.set('mapShow', { ...show });
@@ -110,7 +111,7 @@ export function initMapPanel(m, o = {}) {
   const saved = store.get('mapShow', null);
   if (saved) show = { ...DEFAULT, ...saved };
   else if (store.get('hideMarks', false)) show = { ...DEFAULT, platges: false, punts: false, boies: false }; // l'antic botó de l'ull
-  const icons = { platges: BEACH_SW, punts: PT_SW, boies: `<span class="mp-buoy">${o.buoyIco ?? ''}</span>`, sortides: EXIT_ICO, ports: PORT_ICO, coves: CAVE_ICO, fars: LIGHT_ICO, rius: RIVER_ICO, ruta: ROUTE_SW };
+  const icons = { platges: BEACH_SW, punts: PT_SW, boies: `<span class="mp-buoy">${o.buoyIco ?? ''}</span>`, sortides: EXIT_ICO, ports: PORT_ICO, coves: CAVE_ICO, fars: LIGHT_ICO, rius: RIVER_ICO, emissaris: OUTFALL_ICO, ruta: ROUTE_SW };
   const grad = (S, n = S.length) => `<i class="mp-grad" style="background:linear-gradient(135deg, ${S.slice(0, n).map(([, c]) => c).join(', ')})"></i>`;
   const Ctl = L.Control.extend({
     onAdd() {

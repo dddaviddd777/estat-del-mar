@@ -1,9 +1,9 @@
 import { BEACHES, TZ, waveLevel, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore, roughBefore } from './marine.js';
 import * as store from './store.js';
 import { initLayers, setLayersTime, GRID_BOUNDS } from './layers.js';
 import { initMapPanel, showKind } from './mappanel.js';
-import { initPlaces, loadPlaces, riverAlert } from './places.js';
+import { initPlaces, loadPlaces, waterAlert, waterAlertText, placesNear, outfallText, OUTFALL_ICO } from './places.js';
 import { initServices, loadServices, servicesHtml } from './services.js';
 import { BUOY, fetchBuoy, cachedBuoy, fetchCalib, cachedCalib, OTHER_BUOYS, fetchOthers, cachedOthers } from './buoy.js';
 import { initRoutes, isDrawing, sheetOpen as routeSheetOpen, closeSheet as closeRouteSheet, refreshRoute, redrawSheet, alertsHtml, startRouteAt, addPointAt, hasRoute } from './routeui.js';
@@ -112,14 +112,30 @@ function renderTime() {
   renderList();
 }
 
+// ---------- Emissaris a prop d'una platja o punt (fitxa) ----------
+const OUTFALL_SHEET_R = 1500;
+function outfallsHtml(b, t) {
+  const list = placesNear(b.lat, b.lon, 'emissari', OUTFALL_SHEET_R);
+  if (!list.length) return '';
+  const mm = rainBefore(data, b.lat, b.lon, t);
+  const rain = mm != null && mm >= 10;
+  const dist = (d) => (d < 1000 ? `${Math.round(d / 50) * 50} m` : `${nf1.format(d / 1000)} km`);
+  return `<div class="d-h">Emissaris a prop</div><ul class="r-feat">${list.map((p) => `<li class="${rain ? 'atencio' : 'ok'}"><span class="rf-ico">${OUTFALL_ICO}</span><div>
+      <b>${esc(p.name)}</b> <span class="rf-t">a ${dist(p.dist)}</span><p>${esc(outfallText(p))}</p></div></li>`).join('')}</ul>
+    <p class="d-note">${rain ? `Han caigut ${Math.round(mm)} mm en 48 hores: amb pluja forta el clavegueram pot sobreeixir i a prop dels emissaris l'aigua pot estar bruta un o dos dies.` : `Sense pluja forta no hauria d'afectar l'aigua de la platja.`} Posició de la boca de l'emissari, de l'Agència Catalana de l'Aigua.</p>`;
+}
+
 // ---------- Avisos de temps ----------
 // Una nedada dura unes 2 hores: es miren els avisos de l'hora triada fins a 2 h després (més el marge de weatherAlerts).
 const SWIM_LEN = 2 * 3600;
-/** Avisos d'una platja o punt a l'hora `t`: els del temps i, si ha plogut, el de la desembocadura més propera. */
+/**
+ * Avisos d'una platja o punt a l'hora `t`: els del temps i el d'aigua tèrbola (si ha plogut i hi ha una desembocadura o
+ * un emissari a prop, o si fa poc hi havia mala mar).
+ */
 function beachAlerts(b, hours, t) {
   const out = weatherAlerts(hours, t, t + SWIM_LEN);
-  const r = riverAlert([[b.lat, b.lon]], rainBefore(data, b.lat, b.lon, t), t);
-  if (r) out.push(r);
+  const w = waterAlert([[b.lat, b.lon]], { mm: rainBefore(data, b.lat, b.lon, t), rough: roughBefore(data, b.lat, b.lon, t), t });
+  if (w) out.push(w);
   return out;
 }
 /** Avisos de tota la costa a l'hora triada: si només afecten unes quantes platges, es diu on. */
@@ -129,16 +145,17 @@ function renderAlerts() {
   for (const b of BEACHES) {
     for (const a of beachAlerts(b, data.beaches[b.id], t)) {
       const k = byKind.get(a.kind);
-      if (!k) byKind.set(a.kind, { ...a, beaches: [b.short ?? b.name] });
+      if (!k) byKind.set(a.kind, { ...a, why: a.why && { ...a.why }, beaches: [b.short ?? b.name] });
       else {
         k.beaches.push(b.short ?? b.name);
+        if (a.why) for (const w in a.why) k.why[w] ||= a.why[w];
         if (a.level === 'perill' && k.level !== 'perill') Object.assign(k, { level: a.level, text: a.text, t: a.t });
       }
     }
   }
-  // L'avís de les desembocadures diu quin riu a cada platja: per a tota la costa, un text general.
-  const riv = byKind.get('riera');
-  if (riv?.beaches.length > 1) riv.text = `Ha plogut força les últimes 48 hores: prop de les desembocadures de rius i rieres l'aigua pot estar tèrbola i bruta durant un o dos dies.`;
+  // L'avís d'aigua tèrbola diu quin riu o emissari hi ha a cada platja: per a tota la costa, un text general.
+  const wat = byKind.get('aigua');
+  if (wat?.beaches.length > 1) wat.text = waterAlertText(wat.why);
   const list = [...byKind.values()].sort((a, b) => (a.level === 'perill' ? 0 : 1) - (b.level === 'perill' ? 0 : 1) || a.t - b.t);
   list.forEach((a) => { if (a.beaches.length < BEACHES.length * 0.6) a.where = `(${a.beaches.slice(0, 3).join(', ')}${a.beaches.length > 3 ? '…' : ''})`; });
   const el = $('alerts');
@@ -1091,6 +1108,7 @@ function renderDetail() {
     ${seaBlock(b, h, a)}
     <div class="d-windows">${wins}</div>
     ${svc ? `<div class="d-h">${b.custom ? 'A prop' : 'A la platja'}</div>${svc}<p class="d-note">Serveis d'OpenStreetMap a menys de ${SERVICES_R} m: pot ser que n'hi falti algun o que siguin de temporada.</p>` : ''}
+    ${outfallsHtml(b, h.t)}
     ${modelsBlock(b, h)}
     <div class="d-h">Pròximes 48 hores</div>
     <div class="d-chart" id="dChart">${chart(b, hours)}</div>

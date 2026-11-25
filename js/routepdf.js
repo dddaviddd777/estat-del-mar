@@ -142,7 +142,7 @@ async function renderMap(info, wMm, hMm, tiles = true) {
     g.lineWidth = mm(0.4); g.stroke();
   }
 
-  // Coves, puntes i desembocadures per on passa la ruta.
+  // Coves, puntes, desembocadures i emissaris per on passa la ruta.
   for (const f of info.features ?? []) {
     const x = X(f.lon), y = Y(f.lat), q = mm(3.4);
     g.strokeStyle = '#fff'; g.lineWidth = mm(0.4);
@@ -150,6 +150,10 @@ async function renderMap(info, wMm, hMm, tiles = true) {
       g.beginPath(); g.moveTo(x, y - q * 0.62); g.lineTo(x + q * 0.62, y + q * 0.46); g.lineTo(x - q * 0.62, y + q * 0.46); g.closePath();
       g.fillStyle = '#e8892b'; g.fill(); g.stroke();
       g.fillStyle = '#fff'; g.font = `800 ${mm(2.1)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('!', x, y + q * 0.08);
+    } else if (f.kind === 'emissari') {
+      g.beginPath(); g.arc(x, y, q / 2, 0, Math.PI * 2); g.fillStyle = '#7d5aa6'; g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(x - q * 0.3, y + q * 0.12); g.lineTo(x + q * 0.1, y + q * 0.12); g.moveTo(x + q * 0.1, y - q * 0.06); g.lineTo(x + q * 0.1, y + q * 0.3); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(x + q * 0.26, y - q * 0.2, q * 0.07, 0, Math.PI * 2); g.fill();
     } else if (f.kind === 'riu') {
       g.beginPath(); g.arc(x, y, q / 2, 0, Math.PI * 2); g.fillStyle = '#2f86c9'; g.fill(); g.stroke();
       g.beginPath(); g.moveTo(x - q * 0.28, y); g.quadraticCurveTo(x - q * 0.14, y - q * 0.18, x, y); g.quadraticCurveTo(x + q * 0.14, y + q * 0.18, x + q * 0.28, y); g.stroke();
@@ -328,12 +332,12 @@ export async function makeRoutePdf(info) {
   const NOTE_H = noteLines.length * 6.3 * pt * 1.3 + 1;
 
   // --- Bloc de text: resum, millor hora, avisos, coves/puntes/desembocadures i serveis (draw = false només mesura) ---
-  const FEAT_COL = { cova: [107, 79, 58], punta: [232, 137, 43], riu: [47, 134, 201] };
+  const FEAT_COL = { cova: [107, 79, 58], punta: [232, 137, 43], riu: [47, 134, 201], emissari: [125, 90, 166] };
   const LVL_COL = { ok: [60, 170, 100], atencio: [232, 160, 30], perill: [214, 58, 46] };
   const featIcon = (kind, x, yy) => {
     doc.setFillColor(...FEAT_COL[kind]);
     if (kind === 'punta') doc.triangle(x + 1.4, yy, x + 2.9, yy + 2.7, x - 0.1, yy + 2.7, 'F');
-    else if (kind === 'riu') doc.circle(x + 1.4, yy + 1.4, 1.4, 'F');
+    else if (kind === 'riu' || kind === 'emissari') doc.circle(x + 1.4, yy + 1.4, 1.4, 'F');
     else { doc.roundedRect(x, yy, 2.8, 2.8, 0.6, 0.6, 'F'); doc.setFillColor(29, 20, 14); doc.roundedRect(x + 0.8, yy + 1.1, 1.2, 1.7, 0.5, 0.5, 'F'); }
   };
   const block = (x, y0, w, draw) => {
@@ -361,7 +365,7 @@ export async function makeRoutePdf(info) {
     for (const a of info.alerts) boxed(`${a.level === 'perill' ? 'Perill' : 'Atenció'}: ${a.text}`, ALERT[a.level]?.bg ?? SOFT, ALERT[a.level]?.bar ?? MUTED);
     if (info.alerts.length) { P("Els fronts i les tempestes es poden avançar o endarrerir fins a 2 hores: abans de sortir, mireu el radar del Meteocat o de l'AEMET.", 6.3, 'normal', MUTED); yy += 1.4; }
     if (info.features.length || info.noRiver) {
-      yy += 0.6; H('COVES, PUNTES I DESEMBOCADURES');
+      yy += 0.6; H('COVES, PUNTES, DESEMBOCADURES I EMISSARIS');
       for (const f of info.features) {
         const top = yy;
         P(`${f.head} · ${f.times}${f.dist != null ? ` · a ${fmtDist(Math.max(10, f.dist))}` : ''}`, 7, 'bold', INK, 5.5);
@@ -438,6 +442,7 @@ export async function makeRoutePdf(info) {
   if (kinds.has('cova')) legItem((x, yy) => featIcon('cova', x, yy - 1.4), 'Cova', 3.8);
   if (kinds.has('punta')) legItem((x, yy) => featIcon('punta', x, yy - 1.4), 'Punta', 3.8);
   if (kinds.has('riu')) legItem((x, yy) => featIcon('riu', x, yy - 1.4), 'Desembocadura', 3.8);
+  if (kinds.has('emissari')) legItem((x, yy) => featIcon('emissari', x, yy - 1.4), 'Emissari', 3.8);
   legItem(() => {}, R.back ? `Línia prima: tornada · hores de pas cada ${info.tick} min` : `Hores de pas cada ${info.tick} min`, 0);
   if (map && map.tilesOk < map.tilesN) legItem(() => {}, `Falten ${map.tilesN - map.tilesOk} trossos del mapa de fons`, 0);
   const mapBottom = ly + 3.6;
