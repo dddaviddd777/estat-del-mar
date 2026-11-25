@@ -138,7 +138,6 @@ function ramp(S, v) {
   }
   return S.at(-1)[1];
 }
-const rgb = (c) => `rgb(${c.map(Math.round).join(',')})`;
 
 /** Valor i color (rgb, alfa 0-255) de la capa de colors en un punt; null si no n'hi ha. */
 function colorAt(kind, lat, lon) {
@@ -361,47 +360,13 @@ function stopMotion() {
   if (motionCv) motionCv.getContext('2d').clearRect(0, 0, motionCv.width, motionCv.height);
 }
 
-// ---------- Lectura del punt (passant el ratolí o tocant el mapa) ----------
+// ---------- Utilitats de lectura ----------
+// Abans hi havia una lectura a baix a l'esquerra en passar el ratolí o tocar el mapa (`.fld-read`). L'usuari, 25/11/2026:
+// "quin sentit té si ja tenim el de la creueta?". Es va treure: la mira ja dona onada i vent, i les ratxes, la pluja i els
+// corrents (si la capa és encesa) hi surten en una línia més.
 const nf1 = (v) => v.toFixed(1).replace('.', ',');
 const fromDeg = (u, v) => ((Math.atan2(u, v) * 180) / Math.PI + 180 + 360) % 360; // d'on ve un vector cap on va
 const toDeg = (u, v) => ((Math.atan2(u, v) * 180) / Math.PI + 360) % 360;
-const dot = (c) => `<i style="background:${rgb(c)}"></i>`;
-
-function readAt(ll) {
-  if (!frame || !any()) { ui.read.hidden = true; return; }
-  const { lat, lng } = ll;
-  const parts = [];
-  if (on.color === 'waves') {
-    const hs = bil(frame.hs, frame.ok, lat, lng);
-    if (hs != null) {
-      const from = fromDeg(bil(frame.hx, frame.ok, lat, lng), bil(frame.hy, frame.ok, lat, lng));
-      const tp = bil(frame.tp, frame.ok, lat, lng);
-      parts.push(`<span>${dot(ramp(WAVE_RGB, hs))}Onada <b>${nf1(hs)} m</b> del ${windName(from)}${tp ? ` · ${Math.round(tp)} s` : ''}</span>`);
-    }
-  } else if (on.color === 'gusts') {
-    const gs = bil(frame.gs, frame.wok, lat, lng);
-    if (gs != null) parts.push(`<span>${dot(ramp(GUST_RGB, gs))}Ratxes <b>${Math.round(gs)} km/h</b></span>`);
-  } else if (on.color === 'rain') {
-    const pr = bil(frame.pr, frame.wok, lat, lng);
-    if (pr != null) parts.push(`<span>${pr < 0.1 ? '<i style="background:transparent;border:1px solid #9aa9b5"></i>No plou' : `${dot(ramp(RAIN_RGB, pr))}Pluja <b>${nf1(pr)} mm</b> en una hora`}</span>`);
-  }
-  if (on.motion === 'wind') {
-    const u = bil(frame.wx, frame.wok, lat, lng), v = bil(frame.wy, frame.wok, lat, lng);
-    if (u != null) {
-      const sp = Math.hypot(u, v);
-      parts.push(`<span>${dot(ramp(WIND_RGB, sp))}Vent <b>${Math.round(sp)} km/h</b> del ${windName(fromDeg(u, v))}</span>`);
-    }
-  } else if (on.motion === 'currents') {
-    const u = bil(frame.cx, frame.cok, lat, lng), v = bil(frame.cy, frame.cok, lat, lng);
-    if (u != null) {
-      const sp = Math.hypot(u, v);
-      parts.push(`<span>${dot(ramp(CUR_RGB, sp))}Corrent <b>${nf1(sp)} km/h</b> cap al ${windName(toDeg(u, v))}</span>`);
-    }
-  }
-  ui.read.innerHTML = parts.length ? parts.join('') : '<span>Fora de la zona de les capes</span>';
-  ui.read.style.bottom = `${ui.legend.hidden ? 22 : 28 + ui.legend.offsetHeight}px`; // just a sobre de la llegenda
-  ui.read.hidden = false;
-}
 
 // ---------- Mira central (com al Windy) ----------
 // L'usuari, 25/11/2026: "un marcador central al qual sempre estigui apuntant, que doni l'alçada de les onades i el vent
@@ -433,20 +398,44 @@ function renderCenter() {
   const set = (html, label) => { ui.ctr.innerHTML = html; ui.ctr.setAttribute('aria-label', label); ui.ctr.title = label; };
   if (!frame) { set(`<span>${gridErr ? 'Sense dades' : '…'}</span>`, gridErr ? "No s'han pogut carregar les dades" : 'Carregant…'); return; }
   const { lat, lng } = map.getCenter();
-  const hs = bil(frame.hs, frame.ok, lat, lng);
-  const u = bil(frame.wx, frame.wok, lat, lng), v = bil(frame.wy, frame.wok, lat, lng);
-  if (hs == null && u == null) { set('<span>Fora de zona</span>', 'Fora de la zona de la previsió'); return; }
+  // A prop d'una platja o d'un punt desat (< 1,5 km, la mateixa regla que la fitxa del punt), els mateixos valors que la
+  // seva etiqueta: onada a la platja (amb l'abric de la cala) i vent. L'usuari, 25/11/2026: "en un mateix punt, la creueta
+  // indica 0,8 m i la targeta 0,4; ha de coincidir". Lluny de les platges, la graella (mar obert, interpolada).
+  const nb = ctx.near?.(lat, lng) ?? null;
+  const gh = bil(frame.hs, frame.ok, lat, lng);
+  const hs = nb?.hs ?? gh;
+  const hFrom = nb?.hs != null ? nb.dir : gh != null ? fromDeg(bil(frame.hx, frame.ok, lat, lng), bil(frame.hy, frame.ok, lat, lng)) : null;
+  const gu = bil(frame.wx, frame.wok, lat, lng), gv = bil(frame.wy, frame.wok, lat, lng);
+  const wsp = nb?.wind ?? (gu != null ? Math.hypot(gu, gv) : null);
+  const wFrom = nb?.wind != null ? nb.windDir : gu != null ? fromDeg(gu, gv) : null;
+  if (hs == null && wsp == null) { set('<span>Fora de zona</span>', 'Fora de la zona de la previsió'); return; }
   const rows = [], said = [];
+  const at = nb?.hs != null ? ` a ${nb.name}` : '';
   if (!isSea(lat, lng)) { rows.push('<span class="land">Terra</span>'); said.push('Terra'); }
   else if (hs != null) {
-    const from = fromDeg(bil(frame.hx, frame.ok, lat, lng), bil(frame.hy, frame.ok, lat, lng));
-    rows.push(`<span>${ARROW(from + 180)}${nf1(hs)} m</span>`);
-    said.push(`Onada de ${nf1(hs)} m del ${windName(from)}`);
+    rows.push(`<span>${hFrom != null ? ARROW(hFrom + 180) : ''}${nf1(hs)} m</span>`);
+    said.push(`Onada${at} de ${nf1(hs)} m${hFrom != null ? ` del ${windName(hFrom)}` : ''}`);
   }
-  if (u != null) {
-    const sp = Math.round(Math.hypot(u, v)), from = fromDeg(u, v);
-    rows.push(`<span>${ARROW(from + 180)}${sp} km/h</span>`);
-    said.push(`vent de ${sp} km/h del ${windName(from)}`);
+  if (wsp != null) {
+    const sp = Math.round(wsp);
+    rows.push(`<span>${wFrom != null ? ARROW(wFrom + 180) : ''}${sp} km/h</span>`);
+    said.push(`vent de ${sp} km/h${wFrom != null ? ` del ${windName(wFrom)}` : ''}`);
+  }
+  // Amb les ratxes, la pluja o els corrents encesos, una línia més (amb el nom, perquè no es confongui amb el vent).
+  if (on.color === 'gusts') {
+    const gs = bil(frame.gs, frame.wok, lat, lng);
+    if (gs != null) { rows.push(`<span>Ratxes ${Math.round(gs)} km/h</span>`); said.push(`ratxes de ${Math.round(gs)} km/h`); }
+  } else if (on.color === 'rain') {
+    const pr = bil(frame.pr, frame.wok, lat, lng);
+    if (pr != null) { const t = pr < 0.1 ? 'No plou' : `Pluja ${nf1(pr)} mm/h`; rows.push(`<span>${t}</span>`); said.push(t.toLowerCase()); }
+  }
+  if (on.motion === 'currents') {
+    const cu = bil(frame.cx, frame.cok, lat, lng), cv = bil(frame.cy, frame.cok, lat, lng);
+    if (cu != null) {
+      const sp = Math.hypot(cu, cv);
+      rows.push(`<span>Corrent ${ARROW(toDeg(cu, cv))}${nf1(sp)} km/h</span>`);
+      said.push(`corrent de ${nf1(sp)} km/h cap al ${windName(toDeg(cu, cv))}`);
+    }
   }
   set(rows.join(''), said.join(', ') + ' · toca per veure el detall');
 }
@@ -460,7 +449,6 @@ function renderUi() {
   const status = loading && any() ? '<p>Carregant les capes…</p>' : gridErr && any() ? `<p class="err">No s'han pogut carregar les capes (${gridErr.message}).</p>` : '';
   ui.legend.innerHTML = lg.join('') + status;
   ui.legend.hidden = !lg.length && !status;
-  if (!any()) ui.read.hidden = true;
 }
 
 async function refresh() {
@@ -504,19 +492,12 @@ export function initLayers(m, c) {
 
   ui = {};
   ui.legend = L.DomUtil.create('div', 'fld-legend', map.getContainer());
-  ui.read = L.DomUtil.create('div', 'fld-read', map.getContainer());
-  ui.legend.hidden = ui.read.hidden = true;
+  ui.legend.hidden = true;
   L.DomEvent.disableClickPropagation(ui.legend);
 
   map.on('zoomstart', () => { colorCv.hidden = true; stopMotion(); motionCv.hidden = true; });
   map.on('movestart', () => { stopMotion(); });
   map.on('moveend resize', () => { if (on.color) drawColor(); if (on.motion) startMotion(); });
-  let pending = null;
-  map.on('mousemove', (e) => { if (!pending) pending = requestAnimationFrame(() => { pending = null; readAt(e.latlng); }); });
-  map.on('mouseout', () => { ui.read.hidden = true; });
-  // Amb la mira encesa, al mòbil (sense ratolí) la lectura és la del centre: tocar el mapa no en treu una altra.
-  map.on('click', (e) => { if (!(center && matchMedia('(pointer: coarse)').matches)) readAt(e.latlng); });
-
   ui.cross = L.DomUtil.create('div', 'ctr-cross', map.getContainer());
   ui.cross.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><g stroke-linecap="round"><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#fff" stroke-width="4.5"/><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#0b1d2c" stroke-width="2.2"/></g><circle cx="16" cy="16" r="2.6" fill="#0b1d2c" stroke="#fff" stroke-width="1.4"/></svg>';
   ui.ctr = L.DomUtil.create('button', 'ctr-read', map.getContainer());
@@ -538,6 +519,9 @@ export function initLayers(m, c) {
   }
   refresh();
 }
+
+/** Les dades de les platges o dels punts han canviat: la mira hi pot agafar els valors. */
+export const redrawCenter = () => renderCenter();
 
 /** L'hora de la barra de temps ha canviat. */
 export function setLayersTime(t) {

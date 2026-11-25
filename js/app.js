@@ -1,8 +1,8 @@
 import { BEACHES, TZ, waveLevel, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
-  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore, roughBefore } from './marine.js';
+  modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, distKm, weatherAlerts, rainBefore, roughBefore } from './marine.js';
 import * as store from './store.js';
 import { initInstall } from './install.js';
-import { initLayers, setLayersTime, GRID_BOUNDS } from './layers.js';
+import { initLayers, setLayersTime, redrawCenter, GRID_BOUNDS } from './layers.js';
 import { initMapPanel, showKind } from './mappanel.js';
 import { initPlaces, loadPlaces, waterAlert, waterAlertText, placesNear, outfallText, OUTFALL_ICO } from './places.js';
 import { initServices, loadServices, servicesHtml } from './services.js';
@@ -224,7 +224,7 @@ function initMap() {
   initRoutes(map, { closeDetail, wide, dayLabel, times: () => data?.times ?? [], routeUsed: () => showKind('ruta') });
   // Capes d'onades i vent (a l'estil del Windy), coves i fars, i el panell «Mapa» (botó sota el de la ruta) per triar
   // què es veu: capes, platges, punts, boies, sortides, ports, coves, fars i la ruta.
-  initLayers(map, { time: () => data.times[idx], consult: (ll) => pickPoint(ll.lat, ll.lng) });
+  initLayers(map, { time: () => data.times[idx], consult: (ll) => pickPoint(ll.lat, ll.lng), near: nearReading });
   initPlaces(map);
   initServices(map);
   initMapPanel(map, { buoyIco: BUOY_ICO, osm });
@@ -530,6 +530,25 @@ function renderSst() {
   el.title = `Temperatura de l'aigua (mitjana de les platges) ${dayLabel(data.times[idx]).toLowerCase()} a les ${hhmm(data.times[idx])}`;
 }
 
+/**
+ * Mira central: si el centre és a menys de 1,5 km d'una platja o d'un punt desat (la regla de la fitxa del punt), l'onada
+ * i el vent de la seva etiqueta, perquè en un mateix lloc la mira i l'etiqueta diguin el mateix. Si no, null (graella).
+ */
+function nearReading(lat, lon) {
+  if (!data) return null;
+  let best = null;
+  const take = (b, h) => {
+    if (!h || h.hs == null) return;
+    const d = distKm(lat, lon, b.lat, b.lon);
+    if (d <= 1.5 && (!best || d < best.d)) best = { b, h, d };
+  };
+  for (const b of BEACHES) take(b, data.beaches[b.id]?.[idx]);
+  for (const p of pts.values()) take(p.b, p.hours?.[idx]);
+  if (!best) return null;
+  const { b, h } = best, a = analyze(b, h);
+  return { name: b.short, hs: a.beachHs, dir: a.sea?.dir ?? h.dir, wind: h.wind ?? null, windDir: h.windDir ?? null };
+}
+
 function renderMarkers() {
   if (!map || !data) return;
   renderSst();
@@ -543,6 +562,7 @@ function renderMarkers() {
     markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap bm-beach', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
   }
   renderPtMarkers();
+  redrawCenter();
 }
 
 // ---------- Punts propis al mapa ----------
