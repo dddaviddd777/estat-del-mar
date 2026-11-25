@@ -139,8 +139,6 @@ function ramp(S, v) {
   return S.at(-1)[1];
 }
 const rgb = (c) => `rgb(${c.map(Math.round).join(',')})`;
-// Degradat de la llegenda: posició lineal entre el primer i l'últim valor.
-const gradient = (S) => { const lo = S[0][0], hi = S.at(-1)[0]; return `linear-gradient(90deg, ${S.map(([v, c]) => `${c} ${(((v - lo) / (hi - lo)) * 100).toFixed(0)}%`).join(', ')})`; };
 
 /** Valor i color (rgb, alfa 0-255) de la capa de colors en un punt; null si no n'hi ha. */
 function colorAt(kind, lat, lon) {
@@ -453,22 +451,11 @@ function renderCenter() {
   set(rows.join(''), said.join(', ') + ' · toca per veure el detall');
 }
 
-// ---------- Llegenda (el botó és al panell del mapa, js/mappanel.js) ----------
-const LEGENDS = {
-  waves: ['Onada', WAVE_STOPS, ['0', '1', '2', '3', '4 m']],
-  gusts: ['Ratxes', GUST_STOPS, ['0', '20', '40', '60', '80 km/h']],
-  rain: ['Pluja', RAIN_STOPS, ['0,1', '4', '8', '16 mm/h']],
-  wind: ['Vent', WIND_STOPS, ['0', '20', '40', '55 km/h']],
-  currents: ['Corrent', CUR_STOPS, ['0', '1', '2,5 km/h']],
-};
+// ---------- Avisos de les capes, a baix a l'esquerra (el botó és al panell del mapa, js/mappanel.js) ----------
+// Sense escala de colors (l'usuari, 25/11/2026: «aquest termòmetre és irrellevant»; la lectura del punt ja dona el valor).
+// Només surt mentre es carrega, si falla o amb els corrents (nota sobre la resolució del model).
 function renderUi() {
   const lg = [];
-  // La llegenda del moviment només surt sola: amb colors, les partícules són clares.
-  for (const k of [on.color, on.color ? null : on.motion]) {
-    if (!k) continue;
-    const [name, S, ticks] = LEGENDS[k];
-    lg.push(`<div><span>${name}</span><i style="background:${gradient(S)}"></i><small>${ticks.map((t) => `<em>${t}</em>`).join('')}</small></div>`);
-  }
   if (on.motion === 'currents') lg.push('<p>Corrents: model mar endins (~8 km). A tocar de la costa, més febles i canviants.</p>');
   const status = loading && any() ? '<p>Carregant les capes…</p>' : gridErr && any() ? `<p class="err">No s'han pogut carregar les capes (${gridErr.message}).</p>` : '';
   ui.legend.innerHTML = lg.join('') + status;

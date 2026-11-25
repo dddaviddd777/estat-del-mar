@@ -103,6 +103,6 @@ L'usuari i els seus companys neden de cala a cala (5-6 km, a ~50 m de la costa, 
    - Quan hi hagi prou dades (2-3 setmanes): decidir si canviem de model principal o hi apliquem una correcció, i aturar el workflow.
 2. Diari de nedades: platja, hora, com estava el mar (0-10) i onada observada, guardat al mòbil amb exportació; servirà per calibrar orientacions i pesos amb dades reals.
 3. Calibratge de 2-3 setmanes amb el Windy i el que trobin a l'aigua.
-4. Més endavant: boies reals, Meteocat, avís la nit abans.
-5. Propostes del grup pendents (segona tanda): dificultat de la ruta (5, 6, 20), per quin costat començar (14), mar de brisa (24). Primera tanda (7, 9, 11, 12, 18, 19, 21) encara per fer.
+4. Més endavant: Meteocat, avís la nit abans (les boies reals ja hi són).
+5. Propostes del grup pendents (segona tanda): dificultat de la ruta (5, 6, 20), per quin costat començar (14), mar de brisa (24). Primera tanda (7, 9, 11, 18, 19, 21) encara per fer; la 12 (franja d'estiu) queda resolta amb la franja automàtica de 24/11/2026. Fetes: 16, 22, 10 i 17 (emissaris i aigua tèrbola), 1-3 (serveis). Més endavant o descartades: 25, 23, 13, 15 i 4 (només els bars d'OSM).
 6. Rutes: calibrar el corrent i l'abric amb nedades reals; el diari de nedades hauria de poder desar també la ruta feta.
