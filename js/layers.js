@@ -4,7 +4,7 @@
 // Les dades són una graella de punts d'Open-Meteo (onades i corrents: Marine; vent, ratxes i pluja: AROME) que es
 // descarrega només si s'encén alguna capa, i segueixen l'hora de la barra de temps.
 import * as store from './store.js';
-import { TZ, windName, waveLevel } from './marine.js';
+import { TZ, windName } from './marine.js';
 import { loadCoast, coastInfo, inCoastArea, coastReady } from './coast.js';
 
 // ---------- Graella ----------
@@ -417,7 +417,9 @@ export function setCenterRead(v) {
   store.set('centerRead', center);
   refresh();
 }
-const WAVE_COL = ['#5aa9e6', '#f5c542', '#ef5b5b'], WIND_COL = ['#3ccf7a', '#f5c542', '#ef5b5b'];
+// Lectura minimalista (proposta B, triada per l'usuari el 25/11/2026): a la dreta de la creu (la costa queda a l'esquerra),
+// onada a dalt i vent a sota, només el número amb les unitats i una fletxeta cap on va. El detall, a la fitxa (un toc).
+const ARROW = (to) => `<svg viewBox="0 0 12 12" style="transform:rotate(${Math.round(to) % 360}deg)" aria-hidden="true"><path d="M6 11V1.5M2.5 5 6 1.5 9.5 5"/></svg>`;
 /** Mar o terra: amb la línia de costa real on n'hi ha; si no (o lluny de la costa), l'elevació de la graella. */
 function isSea(lat, lon) {
   if (coastReady() && inCoastArea(lat, lon)) {
@@ -430,28 +432,25 @@ function renderCenter() {
   if (!ui?.ctr) return;
   ui.cross.hidden = ui.ctr.hidden = !center;
   if (!center) return;
-  if (!frame) {
-    ui.ctr.innerHTML = `<span>${gridErr ? "No s'han pogut carregar les dades" : 'Carregant…'}</span>`;
-    return;
-  }
+  const set = (html, label) => { ui.ctr.innerHTML = html; ui.ctr.setAttribute('aria-label', label); ui.ctr.title = label; };
+  if (!frame) { set(`<span>${gridErr ? 'Sense dades' : '…'}</span>`, gridErr ? "No s'han pogut carregar les dades" : 'Carregant…'); return; }
   const { lat, lng } = map.getCenter();
-  const parts = [];
   const hs = bil(frame.hs, frame.ok, lat, lng);
   const u = bil(frame.wx, frame.wok, lat, lng), v = bil(frame.wy, frame.wok, lat, lng);
-  if (hs == null && u == null) { ui.ctr.innerHTML = '<span>Fora de la zona de la previsió</span>'; return; }
-  if (!isSea(lat, lng)) parts.push('<span><i class="land"></i>Terra</span>');
+  if (hs == null && u == null) { set('<span>Fora de zona</span>', 'Fora de la zona de la previsió'); return; }
+  const rows = [], said = [];
+  if (!isSea(lat, lng)) { rows.push('<span class="land">Terra</span>'); said.push('Terra'); }
   else if (hs != null) {
     const from = fromDeg(bil(frame.hx, frame.ok, lat, lng), bil(frame.hy, frame.ok, lat, lng));
-    const tp = bil(frame.tp, frame.ok, lat, lng);
-    parts.push(`<span><i style="background:${WAVE_COL[waveLevel(hs)]}"></i>Onada <b>${nf1(hs)} m</b> del ${windName(from)}${tp ? ` · ${Math.round(tp)} s` : ''}</span>`);
+    rows.push(`<span>${ARROW(from + 180)}${nf1(hs)} m</span>`);
+    said.push(`Onada de ${nf1(hs)} m del ${windName(from)}`);
   }
   if (u != null) {
-    const sp = Math.hypot(u, v), gs = bil(frame.gs, frame.wok, lat, lng) ?? sp;
-    // Color com a les etiquetes: el vent lateral (20 / 38 km/h) i les ratxes (35 / 50 km/h), el pitjor dels dos.
-    const lv = Math.max(sp >= 38 ? 2 : sp >= 20 ? 1 : 0, gs >= 50 ? 2 : gs >= 35 ? 1 : 0);
-    parts.push(`<span><i class="round" style="background:${WIND_COL[lv]}"></i>Vent <b>${Math.round(sp)} km/h</b> del ${windName(fromDeg(u, v))}${gs >= sp + 10 ? ` · ratxes ${Math.round(gs)}` : ''}</span>`);
+    const sp = Math.round(Math.hypot(u, v)), from = fromDeg(u, v);
+    rows.push(`<span>${ARROW(from + 180)}${sp} km/h</span>`);
+    said.push(`vent de ${sp} km/h del ${windName(from)}`);
   }
-  ui.ctr.innerHTML = parts.join('') + `<small>${parts[0]?.includes('class="land"') ? 'Toca per veure el detall' : 'Mar obert · toca per veure el detall'}</small>`;
+  set(rows.join(''), said.join(', ') + ' · toca per veure el detall');
 }
 
 // ---------- Llegenda (el botó és al panell del mapa, js/mappanel.js) ----------
@@ -535,7 +534,6 @@ export function initLayers(m, c) {
   ui.cross.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><g stroke-linecap="round"><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#fff" stroke-width="4.5"/><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#0b1d2c" stroke-width="2.2"/></g><circle cx="16" cy="16" r="2.6" fill="#0b1d2c" stroke="#fff" stroke-width="1.4"/></svg>';
   ui.ctr = L.DomUtil.create('button', 'ctr-read', map.getContainer());
   ui.ctr.type = 'button';
-  ui.ctr.title = 'Onada i vent al centre del mapa · toca per veure el detall';
   L.DomEvent.disableClickPropagation(ui.ctr);
   L.DomEvent.disableScrollPropagation(ui.ctr);
   L.DomEvent.on(ui.ctr, 'click', () => { if (frame) ctx.consult?.(map.getCenter()); });
