@@ -177,7 +177,9 @@ function stopDraw() {
   map.removeLayer(drawing.layer);
   drawing = null;
   document.body.classList.remove('routing');
-  map.scrollWheelZoom.disable();
+  // Torna la rodeta com era: zoom a pantalla ampla, desplaçar la pàgina en una sola columna. Abans es desactivava
+  // sempre i, després de dibuixar una ruta, la rodeta deixava de fer zoom a l'ordinador (l'usuari, 25/11/2026).
+  map.scrollWheelZoom[ctx.wide.matches ? 'enable' : 'disable']();
   layer.addTo(map);
 }
 function cancelDraw() {
