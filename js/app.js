@@ -1,4 +1,4 @@
-import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
+import { BEACHES, TZ, waveLevel, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint, windName,
   modelCompare, windyUrl, sstColor, sstWord, sstStats, sstGradient, SST_RANGE, wetsuitAdvice, SEA_KINDS, fetchPoint, nearBeach, weatherAlerts, rainBefore } from './marine.js';
 import * as store from './store.js';
 import { initLayers, setLayersTime, GRID_BOUNDS } from './layers.js';
@@ -388,7 +388,7 @@ function pillHtml(b, h, a, mini = lbl.mini) {
   return `<b class="sc" style="--c:${LEVELS[a.level].color}" title="Nota per nedar: ${nf1.format(a.score)} de 10 (${LEVELS[a.level].label.toLowerCase()})">${score}</b>
     <span class="nm">${esc(b.short)}</span>
     <span class="st">
-      <span class="wv" title="Onada a la platja: ${m(a.beachHs)} m${wdir != null ? `, ve del ${windName(wdir)}` : ''}">${WAVE_ICO}${wdir != null ? ARROW.replace('ROT', waveRot) : ''}${a.beachHs == null ? '—' : m(a.beachHs)}<small>m</small></span>
+      <span class="wv l${waveLevel(a.beachHs)}" title="Onada a la platja: ${m(a.beachHs)} m${wdir != null ? `, ve del ${windName(wdir)}` : ''}${['', ' (una mica d\'onada)', ' (onada alta)'][waveLevel(a.beachHs)]}">${WAVE_ICO}${wdir != null ? ARROW.replace('ROT', waveRot) : ''}${a.beachHs == null ? '—' : m(a.beachHs)}<small>m</small></span>
       <span class="wind" style="--w:${LEVELS[a.windLevel].color}" title="Vent ${REL[a.rel]}: ${h.wind == null ? '—' : Math.round(h.wind)} km/h del ${windName(h.windDir)}">${WIND_ICO}${ARROW.replace('ROT', windRot)}${h.wind == null ? '—' : Math.round(h.wind)}<small>km/h</small></span>
     </span>`;
 }

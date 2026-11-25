@@ -295,8 +295,15 @@ export const LEVELS = [
   { label: 'Mala mar', short: 'Mala mar', color: '#ef5b5b' },
 ];
 
-// Llindars (a calibrar). Onada a la platja: verd < 0,3 m · groc 0,3–0,8 m · vermell ≥ 0,8 m.
-export const WAVE_LIMITS = [0.3, 0.8];
+// Llindars (a calibrar). Onada a la platja: verd < 0,4 m · groc 0,4–1 m · vermell ≥ 1 m (l'usuari, 25/11/2026:
+// "nedar amb ones de 0,4 no és tan greu"; abans 0,3 i 0,8). Els fa servir l'índex i el color de la pastilla de l'onada.
+export const WAVE_LIMITS = [0.4, 1.0];
+/** Color de l'onada a la platja (0 blau, 1 groc, 2 vermell), segons l'alçada que es mostra (arrodonida a 0,1 m). */
+export function waveLevel(hs) {
+  if (hs == null) return 0;
+  const r = Math.round(hs * 10) / 10;
+  return r >= WAVE_LIMITS[1] ? 2 : r >= WAVE_LIMITS[0] ? 1 : 0;
+}
 // Vent sostingut (km/h) per passar a groc i a vermell segons d'on bufa. El vermell és només per a vent fort de debò.
 const WIND_LIMITS = { mar: [15, 35], lateral: [20, 38], terra: [25, 40] };
 const GUST_LIMITS = [35, 50];

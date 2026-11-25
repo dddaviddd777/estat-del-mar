@@ -42,9 +42,9 @@ El vermell vol dir mala mar de debò; el vent sol, si no és fort, només arriba
 
 | | Onada a la platja | Vent sostingut | Ratxes |
 |---|---|---|---|
-| 🟢 **Bo** | < 0,3 m | de mar < 15 · lateral < 20 · de terra < 25 km/h | < 35 km/h |
-| 🟡 **Una mica mogut** | 0,3 – 0,8 m | de mar 15–35 · lateral 20–38 · de terra 25–40 km/h | 35–50 km/h |
-| 🔴 **Mala mar** | ≥ 0,8 m | de mar ≥ 35 · lateral ≥ 38 · de terra ≥ 40 km/h | ≥ 50 km/h, o tempesta |
+| 🟢 **Bo** | < 0,4 m | de mar < 15 · lateral < 20 · de terra < 25 km/h | < 35 km/h |
+| 🟡 **Una mica mogut** | 0,4 – 1 m | de mar 15–35 · lateral 20–38 · de terra 25–40 km/h | 35–50 km/h |
+| 🔴 **Mala mar** | ≥ 1 m | de mar ≥ 35 · lateral ≥ 38 · de terra ≥ 40 km/h | ≥ 50 km/h, o tempesta |
 
 Els llindars són a `js/marine.js` (`WAVE_LIMITS`, `WIND_LIMITS`, `GUST_LIMITS`).
 
