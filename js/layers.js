@@ -383,6 +383,9 @@ export function setCenterRead(v) {
 // Lectura minimalista (proposta B, triada per l'usuari el 25/11/2026): a la dreta de la creu (la costa queda a l'esquerra),
 // onada a dalt i vent a sota, només el número amb les unitats i una fletxeta cap on va. El detall, a la fitxa (un toc).
 const ARROW = (to) => `<svg viewBox="0 0 12 12" style="transform:rotate(${Math.round(to) % 360}deg)" aria-hidden="true"><path d="M6 11V1.5M2.5 5 6 1.5 9.5 5"/></svg>`;
+// Les mateixes icones d'onada i de vent que les etiquetes de les platges (WAVE_ICO i WIND_ICO a app.js).
+const WAVE_ICO = '<svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4.5q1.25-1.6 2.5 0t2.5 0 2.5 0 2.5 0M1 8.5q1.25-1.6 2.5 0t2.5 0 2.5 0 2.5 0"/></svg>';
+const WIND_ICO = '<svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4h6.5a1.6 1.6 0 1 0-1.6-1.6M1 6.5h9a1.6 1.6 0 1 1-1.6 1.6M1 9h4"/></svg>';
 /** Mar o terra: amb la línia de costa real on n'hi ha; si no (o lluny de la costa), l'elevació de la graella. */
 function isSea(lat, lon) {
   if (coastReady() && inCoastArea(lat, lon)) {
@@ -413,12 +416,12 @@ function renderCenter() {
   const at = nb?.hs != null ? ` a ${nb.name}` : '';
   if (!isSea(lat, lng)) { rows.push('<span class="land">Terra</span>'); said.push('Terra'); }
   else if (hs != null) {
-    rows.push(`<span>${hFrom != null ? ARROW(hFrom + 180) : ''}${nf1(hs)} m</span>`);
+    rows.push(`<span>${WAVE_ICO}${hFrom != null ? ARROW(hFrom + 180) : ''}<b>${nf1(hs)}</b><small>m</small></span>`);
     said.push(`Onada${at} de ${nf1(hs)} m${hFrom != null ? ` del ${windName(hFrom)}` : ''}`);
   }
   if (wsp != null) {
     const sp = Math.round(wsp);
-    rows.push(`<span>${wFrom != null ? ARROW(wFrom + 180) : ''}${sp} km/h</span>`);
+    rows.push(`<span>${WIND_ICO}${wFrom != null ? ARROW(wFrom + 180) : ''}<b>${sp}</b><small>km/h</small></span>`);
     said.push(`vent de ${sp} km/h${wFrom != null ? ` del ${windName(wFrom)}` : ''}`);
   }
   // Amb les ratxes, la pluja o els corrents encesos, una línia més (amb el nom, perquè no es confongui amb el vent).

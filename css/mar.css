@@ -560,12 +560,17 @@ body.map-max #alerts { display: none; }
 /* Mira central (js/layers.js): creu fixa al centre del mapa i la lectura just a sota. */
 .ctr-cross { position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; z-index: 650; pointer-events: none; }
 .ctr-cross svg { display: block; width: 32px; height: 32px; }
-/* Proposta B (25/11/2026): petita, semitransparent i a la dreta de la creu, cap al mar. */
+/* Proposta B (25/11/2026): petita i a la dreta de la creu, cap al mar. Clara com les etiquetes, amb les seves icones
+   d'onada i de vent (proposta B de les icones, triada per l'usuari el 25/11/2026). */
 .ctr-read { position: absolute; left: calc(50% + 18px); top: 50%; transform: translateY(-50%); z-index: 650; display: flex; flex-direction: column; gap: 1px;
-  padding: 3px 7px; border: 0; border-radius: 7px; background: rgba(11, 29, 44, .55); color: #fff; font: inherit; font-size: 11.5px; font-weight: 500; line-height: 1.25;
+  padding: 3px 7px; border: 0; border-radius: 7px; background: rgba(255, 255, 255, .85); color: #0b1d2c; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); font: inherit; font-size: 11.5px; font-weight: 500; line-height: 1.25;
   white-space: nowrap; text-align: left; cursor: pointer; font-variant-numeric: tabular-nums; }
-.ctr-read:hover { background: rgba(11, 29, 44, .7); }
+.ctr-read:hover { background: rgba(255, 255, 255, .95); }
 .ctr-read span { display: flex; align-items: center; gap: 3px; }
 .ctr-read svg { width: 11px; height: 11px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .ctr-read .land { opacity: .85; font-weight: 400; }
+/* Icones d'onada i de vent com a les etiquetes de les platges; número en negreta i unitats petites. */
+.ctr-read svg.ico { width: 12px; height: 12px; margin-right: 1px; stroke-width: 1.3; color: #1d6fc4; }
+.ctr-read b { font-weight: 700; }
+.ctr-read small { font-size: 9px; font-weight: 500; opacity: .85; margin-left: 1px; }
 .ctr-cross[hidden], .ctr-read[hidden], body.routing .ctr-cross, body.routing .ctr-read { display: none; }
