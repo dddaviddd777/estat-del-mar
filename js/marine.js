@@ -307,6 +307,9 @@ export function waveLevel(hs) {
 // Vent sostingut (km/h) per passar a groc i a vermell segons d'on bufa. El vermell és només per a vent fort de debò.
 const WIND_LIMITS = { mar: [15, 35], lateral: [20, 38], terra: [25, 40] };
 const GUST_LIMITS = [35, 50];
+// Pes del vent a la nota (l'usuari, 25/11/2026: "redueix un 20 % l'afectació del vent a la nota"). Només toca la nota
+// (i la barra «Vent» de la fitxa); el color de la pastilla del vent i els textos segueixen els llindars en km/h.
+export const WIND_WEIGHT = 0.8;
 
 // Interpolació lineal per trams: pts = [[x, penalització], ...]
 function ramp(x, pts) {
@@ -335,16 +338,17 @@ export function analyze(beach, h) {
   // L'onada compta segons el tipus de mar: la picada o creuada pesa més que la seva alçada; la llarga, una mica menys.
   const pWave = bw == null ? 3 : ramp(sea.eff, [[0.1, 0], [w0, 3], [w1, 6], [w1 + 0.6, 10]]);
   if (sea && pWave >= 1.5 && (sea.kind === 'picada' || sea.kind === 'creuada')) why.push(sea.kind === 'picada' ? 'mar picada (choppy)' : 'mar creuada (rentadora)');
-  const pWind = Math.max(
+  const pWindRaw = Math.max(
     ramp(h.wind ?? 0, [[5, 0], [v0, 3], [v1, 6], [v1 + 15, 10]]),
     ramp(h.gust ?? 0, [[20, 0], [g0, 3], [g1, 6], [g1 + 20, 10]]),
   );
+  const pWind = pWindRaw * WIND_WEIGHT;
   const hi = Math.max(pWave, pWind), lo = Math.min(pWave, pWind);
   let score = clamp10(10 - hi - lo / 3);
 
   if (pWave >= 6) why.push('onada alta'); else if (pWave >= 3) why.push('una mica d\x27onada');
-  if (pWind >= 6) why.push(rel === 'terra' ? 'vent fort de terra (et pot allunyar)' : 'vent fort');
-  else if (pWind >= 3) why.push(rel === 'mar' ? 'vent de mar' : 'vent moderat');
+  if (pWindRaw >= 6) why.push(rel === 'terra' ? 'vent fort de terra (et pot allunyar)' : 'vent fort');
+  else if (pWindRaw >= 3) why.push(rel === 'mar' ? 'vent de mar' : 'vent moderat');
   if (h.code >= 95) { score = 0; why.push('tempesta'); }
 
   const levelOf = (sc) => (sc > 7 ? 0 : sc > 4 ? 1 : 2);
@@ -354,7 +358,7 @@ export function analyze(beach, h) {
     score: Math.round(score * 10) / 10,
     waveScore: Math.round(clamp10(10 - pWave)),
     windScore: Math.round(clamp10(10 - pWind)),
-    windLevel: levelOf(10 - pWind),
+    windLevel: levelOf(10 - pWindRaw),
     beachHs: bw, rel, why, sea,
   };
 }
