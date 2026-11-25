@@ -274,7 +274,6 @@ a.icon-btn { color: inherit; text-decoration: none; }
   .legend { padding: 4px 16px 12px; }
   .legend-note { flex-basis: auto; }
   .side { grid-area: side; overflow-y: auto; min-height: 0; padding-right: 4px; margin-right: -4px; scrollbar-width: thin; }
-  .side > .card:not(.buoy-card) { order: -1; } /* primer les platges, després la boia */
   .foot { text-align: left; }
 
   /* Fitxa de platja: panell fix a la dreta, a sobre de la columna lateral; el mapa queda lliure. */
@@ -411,8 +410,8 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .wx-map { container-type: inline-size; position: absolute; z-index: 820; top: 10px; left: 148px; right: 54px; display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; }
 .wx-map[hidden], body.routing .wx-map { display: none; }
 .wx-pill { pointer-events: auto; max-width: min(100%, 320px); display: flex; align-items: center; gap: 6px; padding: 5px 9px 5px 8px; border: 0; border-radius: 999px; cursor: pointer;
-  background: rgba(11, 29, 44, .78); color: #fff; font: 400 12px/1.25 Outfit, system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0, 0, 0, .3); backdrop-filter: blur(3px); }
-.wx-pill:hover { background: rgba(11, 29, 44, .9); }
+  background: rgba(11, 29, 44, .9); color: #fff; font: 400 12px/1.25 Outfit, system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0, 0, 0, .3); backdrop-filter: blur(3px); }
+.wx-pill:hover { background: rgba(11, 29, 44, .97); }
 .wx-pill svg { width: 15px; height: 15px; flex: none; color: #f5c542; }
 .wx-map.perill .wx-pill svg { color: #ef5b5b; }
 .wx-pill span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -430,6 +429,10 @@ body.routing .r-bar { display: flex; position: absolute; left: 8px; right: 8px; 
 .wx-map .wx-box { margin: 0; background: rgba(11, 29, 44, .93); color: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .35); }
 .wx-box { background: rgba(245, 197, 66, .16); border: 1px solid rgba(245, 197, 66, .45); border-radius: 12px; padding: 8px 10px; margin: 8px 0; font-size: 13.5px; line-height: 1.45; }
 .wx-box.perill { background: rgba(239, 91, 91, .18); border-color: rgba(239, 91, 91, .6); }
+/* Damunt del mapa, el fons ha de ser opac (l'usuari, 25/11/2026: els avisos de perill quedaven transparents i no es
+   llegien, perquè .wx-box.perill tornava a posar el vermell al 18 %). La vora diu el nivell. */
+.wx-map .wx-box, .wx-map .wx-box.perill { background: rgba(11, 29, 44, .97); border: 1px solid #f5c542; }
+.wx-map .wx-box.perill { border-color: #ef5b5b; }
 .wx-box ul { list-style: none; margin: 0; padding: 0; }
 .wx-box li + li { margin-top: 4px; }
 .wx-box li b { color: #ffd166; }
@@ -535,7 +538,8 @@ body.routing .fld-legend, body.routing .fld-read { display: none; }
 .r-feat small { display: block; opacity: .8; font-size: 12.5px; }
 .r-feat p { margin: 3px 0 0; font-size: 13px; opacity: .92; }
 .r-feat-dot svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
-.r-feat-tip { max-width: 240px; white-space: normal; }
+/* Globus dels llocs i de la ruta: amb un ample màxim i les línies partides (si no, el de l'emissari sortia del mapa). */
+.r-feat-tip, .place-tip { width: max-content; max-width: min(260px, 70vw); white-space: normal; line-height: 1.35; }
 /* Fons de satèl·lit: color de fons mentre arriben les fotos */
 body.sat .leaflet-container { background: #1d2b36; }
 /* Neoprè (aigua freda): al requadre de la temperatura, a la fitxa de la platja i al resum de la ruta */
@@ -555,3 +559,21 @@ body.map-max .map-card .legend { display: none; }
 body.map-max .timebar { padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
 /* A tota la pantalla no hi ha bàner d'avisos (els de la platja i la ruta surten a les fitxes). */
 body.map-max #alerts { display: none; }
+
+/* Botons ràpids sota el del panell «Mapa»: platges i mira central (js/mappanel.js). */
+.quick-ctl a { display: grid; place-items: center; color: #0b1d2c; }
+.quick-ctl a:hover { color: #1a73e8; }
+.quick-ctl a.on { color: #1a73e8; background: #e8f0fe; }
+
+/* Mira central (js/layers.js): creu fixa al centre del mapa i la lectura just a sota. */
+.ctr-cross { position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; margin: -16px 0 0 -16px; z-index: 650; pointer-events: none; }
+.ctr-cross svg { display: block; width: 32px; height: 32px; }
+.ctr-read { position: absolute; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); z-index: 650; display: flex; flex-direction: column; gap: 2px;
+  padding: 5px 9px 4px; border-radius: 10px; background: rgba(11, 29, 44, .9); color: #fff; font: inherit; font-size: 12px; line-height: 1.3; white-space: nowrap; text-align: left; cursor: pointer; }
+.ctr-read::before { content: ''; position: absolute; left: 50%; top: -5px; margin-left: -5px; border: 5px solid transparent; border-top: 0; border-bottom-color: rgba(11, 29, 44, .9); }
+.ctr-read span { display: flex; align-items: center; gap: 6px; }
+.ctr-read i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.ctr-read i.round { border-radius: 50%; }
+.ctr-read i.land { background: #c9b98f; }
+.ctr-read small { font-size: 10.5px; opacity: .7; }
+.ctr-cross[hidden], .ctr-read[hidden], body.routing .ctr-cross, body.routing .ctr-read { display: none; }

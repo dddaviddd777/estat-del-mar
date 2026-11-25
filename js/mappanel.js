@@ -3,7 +3,7 @@
 // (platges, punts, boies, sortides, ports, coves, fars, desembocadures, emissaris, la ruta) i serveis (bars, dutxes, fonts,
 // lavabos, pàrquings, socorristes), amb tres botons ràpids. Es recorda a `mapShow` (les capes, a `mapLayers`).
 import * as store from './store.js';
-import { setLayer, layersOn, WAVE_STOPS, GUST_STOPS, RAIN_STOPS, CUR_STOPS } from './layers.js';
+import { setLayer, layersOn, centerOn, setCenterRead, WAVE_STOPS, GUST_STOPS, RAIN_STOPS, CUR_STOPS } from './layers.js';
 import { setExitKinds, setRouteShown, EXIT_ICO, PORT_ICO } from './routeui.js';
 import { setPlaceKinds, CAVE_ICO, LIGHT_ICO, RIVER_ICO, OUTFALL_ICO } from './places.js';
 import { setServiceKinds, SERVICE_TYPES, SERVICE_KINDS } from './services.js';
@@ -13,6 +13,9 @@ const WIND_SW = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" w
 const BEACH_SW = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="#3ccf7a" stroke="#fff" stroke-width="1.6"/><text x="10" y="13.4" text-anchor="middle" font-size="8.5" font-weight="700" font-family="system-ui,sans-serif" fill="#0b1d2c">8,5</text></svg>';
 const PT_SW = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6" fill="#1a73e8" stroke="#fff" stroke-width="2.4"/></svg>';
 const CUR_SW = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5" fill="${CUR_STOPS[2][1]}"/><path d="M3.5 8c2-1.6 4-1.6 6 0s4 1.6 6 0M3.5 12.5c2-1.6 4-1.6 6 0s4 1.6 6 0" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="m14 10.2 2.4 2.3-2.4 2.3" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// Botons ràpids de la columna de l'esquerra (25/11/2026, a petició de l'usuari): platges a un sol toc i la mira central.
+const BEACHES_BTN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="7" cy="12" r="4.5"/><rect x="13" y="7.5" width="9" height="4" rx="1.5"/><rect x="13" y="13" width="9" height="4" rx="1.5"/></svg>';
+const CENTER_BTN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>';
 const ROUTE_SW = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16c3-1 3-6 7-7s4-5 7-6" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M3 16c3-1 3-6 7-7s4-5 7-6" fill="none" stroke="#f2b33d" stroke-width="3" stroke-linecap="round"/></svg>';
 
 const PLACES = [
@@ -90,8 +93,19 @@ function renderPanel() {
   ui.panel.querySelectorAll('[data-p]').forEach((c) => c.classList.toggle('on', same(PRESETS[c.dataset.p].show)));
   // El botó es marca si hi ha alguna capa encesa o algun lloc amagat (perquè se sàpiga que el mapa no és el de sempre).
   ui.btn.classList.toggle('on', Object.values(L1).some(Boolean) || !same(DEFAULT));
+  quick('beaches', show.platges, show.platges ? 'Amaga les platges' : 'Mostra les platges');
+  quick('center', centerOn(), centerOn() ? 'Amaga la mira del centre' : 'Mira: onada i vent al centre del mapa');
 }
 
+/** Estat d'un botó ràpid (marcat = actiu). */
+function quick(k, on, title) {
+  const a = ui?.quick?.[k];
+  if (!a) return;
+  a.classList.toggle('on', on);
+  a.setAttribute('aria-pressed', String(on));
+  a.title = title;
+  a.setAttribute('aria-label', title);
+}
 const row = (attr, ico, name, sub) => `<label class="mp-row"><span class="mp-ico">${ico}</span><span class="mp-nm">${name}${sub ? `<small>${sub}</small>` : ''}</span><input type="checkbox" ${attr}><span class="sw"></span></label>`;
 
 function openPanel(open) {
@@ -157,6 +171,20 @@ export function initMapPanel(m, o = {}) {
     },
   });
   new Ctl({ position: 'topleft' }).addTo(map);
+  // Sota el botó del panell: platges (un toc les amaga o les ensenya) i la mira central.
+  const Quick = L.Control.extend({
+    onAdd() {
+      const el = L.DomUtil.create('div', 'leaflet-bar quick-ctl');
+      el.innerHTML = `<a href="#" role="button" data-q="beaches">${BEACHES_BTN}</a><a href="#" role="button" data-q="center">${CENTER_BTN}</a>`;
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.disableScrollPropagation(el);
+      ui.quick = Object.fromEntries([...el.querySelectorAll('[data-q]')].map((a) => [a.dataset.q, a]));
+      L.DomEvent.on(ui.quick.beaches, 'click', (e) => { L.DomEvent.preventDefault(e); show.platges = !show.platges; apply(); });
+      L.DomEvent.on(ui.quick.center, 'click', (e) => { L.DomEvent.preventDefault(e); setCenterRead(!centerOn()); renderPanel(); });
+      return el;
+    },
+  });
+  new Quick({ position: 'topleft' }).addTo(map);
   map.on('click', () => { if (!ui.panel.hidden) openPanel(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ui.panel.hidden) openPanel(false); });
   apply();

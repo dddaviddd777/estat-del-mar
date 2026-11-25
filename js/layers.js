@@ -4,7 +4,7 @@
 // Les dades són una graella de punts d'Open-Meteo (onades i corrents: Marine; vent, ratxes i pluja: AROME) que es
 // descarrega només si s'encén alguna capa, i segueixen l'hora de la barra de temps.
 import * as store from './store.js';
-import { TZ, windName } from './marine.js';
+import { TZ, windName, waveLevel } from './marine.js';
 import { loadCoast, coastInfo, inCoastArea, coastReady } from './coast.js';
 
 // ---------- Graella ----------
@@ -405,6 +405,55 @@ function readAt(ll) {
   ui.read.hidden = false;
 }
 
+// ---------- Mira central (com al Windy) ----------
+// L'usuari, 25/11/2026: "un marcador central al qual sempre estigui apuntant, que doni l'alçada de les onades i el vent
+// en aquell punt; al mòbil arrossegues el mapa i el centre és el punt". Una creu fixa al centre del mapa i, a sota, una
+// pastilla amb l'onada de mar obert i el vent d'aquell punt (de la mateixa graella que les capes, interpolada), que canvia
+// mentre s'arrossega i segueix l'hora de la barra. Un toc a la pastilla obre la fitxa del punt. Es recorda (`centerRead`).
+let center = store.get('centerRead', true);
+export const centerOn = () => center;
+export function setCenterRead(v) {
+  center = !!v;
+  store.set('centerRead', center);
+  refresh();
+}
+const WAVE_COL = ['#5aa9e6', '#f5c542', '#ef5b5b'], WIND_COL = ['#3ccf7a', '#f5c542', '#ef5b5b'];
+/** Mar o terra: amb la línia de costa real on n'hi ha; si no (o lluny de la costa), l'elevació de la graella. */
+function isSea(lat, lon) {
+  if (coastReady() && inCoastArea(lat, lon)) {
+    const c = coastInfo(lat, lon, 3000);
+    if (c && Number.isFinite(c.dist)) return c.sea;
+  }
+  return !gridLand(lat, lon);
+}
+function renderCenter() {
+  if (!ui?.ctr) return;
+  ui.cross.hidden = ui.ctr.hidden = !center;
+  if (!center) return;
+  if (!frame) {
+    ui.ctr.innerHTML = `<span>${gridErr ? "No s'han pogut carregar les dades" : 'Carregant…'}</span>`;
+    return;
+  }
+  const { lat, lng } = map.getCenter();
+  const parts = [];
+  const hs = bil(frame.hs, frame.ok, lat, lng);
+  const u = bil(frame.wx, frame.wok, lat, lng), v = bil(frame.wy, frame.wok, lat, lng);
+  if (hs == null && u == null) { ui.ctr.innerHTML = '<span>Fora de la zona de la previsió</span>'; return; }
+  if (!isSea(lat, lng)) parts.push('<span><i class="land"></i>Terra</span>');
+  else if (hs != null) {
+    const from = fromDeg(bil(frame.hx, frame.ok, lat, lng), bil(frame.hy, frame.ok, lat, lng));
+    const tp = bil(frame.tp, frame.ok, lat, lng);
+    parts.push(`<span><i style="background:${WAVE_COL[waveLevel(hs)]}"></i>Onada <b>${nf1(hs)} m</b> del ${windName(from)}${tp ? ` · ${Math.round(tp)} s` : ''}</span>`);
+  }
+  if (u != null) {
+    const sp = Math.hypot(u, v), gs = bil(frame.gs, frame.wok, lat, lng) ?? sp;
+    // Color com a les etiquetes: el vent lateral (20 / 38 km/h) i les ratxes (35 / 50 km/h), el pitjor dels dos.
+    const lv = Math.max(sp >= 38 ? 2 : sp >= 20 ? 1 : 0, gs >= 50 ? 2 : gs >= 35 ? 1 : 0);
+    parts.push(`<span><i class="round" style="background:${WIND_COL[lv]}"></i>Vent <b>${Math.round(sp)} km/h</b> del ${windName(fromDeg(u, v))}${gs >= sp + 10 ? ` · ratxes ${Math.round(gs)}` : ''}</span>`);
+  }
+  ui.ctr.innerHTML = parts.join('') + `<small>${parts[0]?.includes('class="land"') ? 'Toca per veure el detall' : 'Mar obert · toca per veure el detall'}</small>`;
+}
+
 // ---------- Llegenda (el botó és al panell del mapa, js/mappanel.js) ----------
 const LEGENDS = {
   waves: ['Onada', WAVE_STOPS, ['0', '1', '2', '3', '4 m']],
@@ -422,7 +471,7 @@ function renderUi() {
     lg.push(`<div><span>${name}</span><i style="background:${gradient(S)}"></i><small>${ticks.map((t) => `<em>${t}</em>`).join('')}</small></div>`);
   }
   if (on.motion === 'currents') lg.push('<p>Corrents: model mar endins (~8 km). A tocar de la costa, més febles i canviants.</p>');
-  const status = loading ? '<p>Carregant les capes…</p>' : gridErr && any() ? `<p class="err">No s'han pogut carregar les capes (${gridErr.message}).</p>` : '';
+  const status = loading && any() ? '<p>Carregant les capes…</p>' : gridErr && any() ? `<p class="err">No s'han pogut carregar les capes (${gridErr.message}).</p>` : '';
   ui.legend.innerHTML = lg.join('') + status;
   ui.legend.hidden = !lg.length && !status;
   if (!any()) ui.read.hidden = true;
@@ -430,14 +479,18 @@ function renderUi() {
 
 async function refresh() {
   renderUi();
-  if (!any()) { colorCv.hidden = true; stopMotion(); motionCv.hidden = true; return; }
+  if (!any()) { colorCv.hidden = true; stopMotion(); motionCv.hidden = true; }
+  // La graella cal per a les capes i per a la mira central.
+  if (!any() && !center) { renderCenter(); return; }
+  renderCenter();
   try {
     await Promise.all([loadGrid(), loadCoast().catch(() => null)]);
-  } catch { renderUi(); return; }
+  } catch { renderUi(); renderCenter(); return; }
   frame = frameAt(curT ?? ctx.time());
   renderUi();
   drawColor();
   startMotion();
+  renderCenter();
 }
 
 /** Capes enceses ara mateix: { waves, gusts, rain, wind, currents } (bool). */
@@ -475,7 +528,19 @@ export function initLayers(m, c) {
   let pending = null;
   map.on('mousemove', (e) => { if (!pending) pending = requestAnimationFrame(() => { pending = null; readAt(e.latlng); }); });
   map.on('mouseout', () => { ui.read.hidden = true; });
-  map.on('click', (e) => readAt(e.latlng));
+  // Amb la mira encesa, al mòbil (sense ratolí) la lectura és la del centre: tocar el mapa no en treu una altra.
+  map.on('click', (e) => { if (!(center && matchMedia('(pointer: coarse)').matches)) readAt(e.latlng); });
+
+  ui.cross = L.DomUtil.create('div', 'ctr-cross', map.getContainer());
+  ui.cross.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><g stroke-linecap="round"><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#fff" stroke-width="4.5"/><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#0b1d2c" stroke-width="2.2"/></g><circle cx="16" cy="16" r="2.6" fill="#0b1d2c" stroke="#fff" stroke-width="1.4"/></svg>';
+  ui.ctr = L.DomUtil.create('button', 'ctr-read', map.getContainer());
+  ui.ctr.type = 'button';
+  ui.ctr.title = 'Onada i vent al centre del mapa · toca per veure el detall';
+  L.DomEvent.disableClickPropagation(ui.ctr);
+  L.DomEvent.disableScrollPropagation(ui.ctr);
+  L.DomEvent.on(ui.ctr, 'click', () => { if (frame) ctx.consult?.(map.getCenter()); });
+  let pendingC = null;
+  map.on('move zoomend resize', () => { if (!pendingC) pendingC = requestAnimationFrame(() => { pendingC = null; renderCenter(); }); });
 
   // Abans la graella es desava amb la resta de dades: ara va a part.
   if (store.get('grid', null)) store.set('grid', undefined);
@@ -492,10 +557,11 @@ export function initLayers(m, c) {
 /** L'hora de la barra de temps ha canviat. */
 export function setLayersTime(t) {
   curT = t;
-  if (!grid || !any()) return;
+  if (!grid || (!any() && !center)) return;
   // Dades velles (l'app ha estat oberta més d'una hora): es tornen a baixar.
   if (Date.now() - grid.fetchedAt > TTL) { refresh(); return; }
   frame = frameAt(t);
   drawColor();
   startMotion();
+  renderCenter();
 }

@@ -224,7 +224,7 @@ function initMap() {
   initRoutes(map, { closeDetail, wide, dayLabel, times: () => data?.times ?? [], routeUsed: () => showKind('ruta') });
   // Capes d'onades i vent (a l'estil del Windy), coves i fars, i el panell «Mapa» (botó sota el de la ruta) per triar
   // què es veu: capes, platges, punts, boies, sortides, ports, coves, fars i la ruta.
-  initLayers(map, { time: () => data.times[idx] });
+  initLayers(map, { time: () => data.times[idx], consult: (ll) => pickPoint(ll.lat, ll.lng) });
   initPlaces(map);
   initServices(map);
   initMapPanel(map, { buoyIco: BUOY_ICO, osm });

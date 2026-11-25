@@ -46,7 +46,7 @@ export function loadPlaces() {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 function tip(p) {
   if (p.type === 'cova') return `<b>${esc(p.name ?? 'Cova')}</b><br><small>Cova de mar · amb onada no hi entreu: l'aigua hi xucla i rebota</small>`;
-  if (p.type === 'emissari') return `<b>${esc(p.name)}</b><br><small>${esc(outfallText(p))}<br>Després de pluja forta, l'aigua dels voltants pot estar bruta. Font: ACA</small>`;
+  if (p.type === 'emissari') return `<b>${esc(p.name)}</b><br><small>${p.kind === 'E' ? "D'emergència: només aboca si falla el sistema o amb pluja forta" : 'Aboca l\'aigua depurada'} · ${p.len ? `${p.len.toLocaleString('ca')} m mar endins, ` : ''}a ${p.depth} m de fons · surt de la ${esc(p.beach)}.<br>Després de pluja forta, l'aigua del voltant pot estar bruta. Font: ACA</small>`;
   if (p.type === 'riu') return `<b>${esc(p.name ? `Desembocadura: ${p.name}` : 'Desembocadura')}</b><br><small>Després de pluja l'aigua hi baixa tèrbola i bruta</small>`;
   return `<b>${esc(p.name ?? 'Far')}</b><br><small>Far · bona referència des de l'aigua</small>`;
 }
@@ -62,10 +62,28 @@ function render() {
     for (const p of places) {
       if (!want.includes(p.type) || !b.contains([p.lat, p.lon])) continue;
       L.marker([p.lat, p.lon], { icon: L.divIcon({ className: `place-dot ${p.type}`, html: ICO[p.type], iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false, zIndexOffset: -1400 })
-        .bindTooltip(tip(p), { direction: 'top', offset: [0, -9] })
+        .bindTooltip(tip(p), { direction: 'top', offset: [0, -9], className: 'place-tip' })
+        .on('tooltipopen', flipTip)
         .addTo(layer);
     }
   }).catch(() => {});
+}
+
+/**
+ * Els globus s'obren cap amunt, però si el punt és a la meitat de dalt del mapa, cap avall: a dalt hi ha el requadre de
+ * la temperatura de l'aigua i el bàner d'avisos, que queden per sobre i el tapaven (l'usuari, 25/11/2026).
+ * Per fer servir com a `marker.on('tooltipopen', flipTip)`.
+ */
+export function flipTip(e) {
+  const t = e.tooltip, mp = t._map;
+  if (!mp) return;
+  const down = mp.latLngToContainerPoint(t.getLatLng()).y < mp.getSize().y * 0.45;
+  const dir = down ? 'bottom' : 'top';
+  if (t.options.direction === dir) return;
+  const off = Math.abs(t.options.offset?.[1] ?? 9);
+  t.options.direction = dir;
+  t.options.offset = [0, down ? off : -off];
+  t.update();
 }
 
 export function initPlaces(m) {

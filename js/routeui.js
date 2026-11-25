@@ -1,7 +1,7 @@
 // Pantalla de les rutes de nedada: dibuixar-la (com al MapTrack: creu al centre, "+ Punt", "Desfer"),
 // pintar-la al mapa per trams amb el color del semàfor i la fitxa "La teva nedada".
 import { LEVELS, TZ, localParts, dayKeyOffset, windName, SEA_KINDS, cachedMarine, rainBefore, roughBefore, nearBeach, wetsuitAdvice } from './marine.js';
-import { waterAlert, placesNear, outfallText, CAVE_ICO, RIVER_ICO, OUTFALL_ICO, RIVER_RAIN } from './places.js';
+import { waterAlert, placesNear, outfallText, flipTip, CAVE_ICO, RIVER_ICO, OUTFALL_ICO, RIVER_RAIN } from './places.js';
 import { servicesHtml, servicesLines } from './services.js';
 import { loadExits, exitsIn, exitName, EXIT_TYPES } from './exits.js';
 import { routeGeometry, fetchRouteData, cachedRouteData, runRoute, recommend, getRoute, saveRoute, deleteRoute,
@@ -377,6 +377,7 @@ function renderLayer() {
   for (const f of featuresInfo(result).list) {
     L.marker([f.lat, f.lon], { icon: L.divIcon({ className: `r-feat-dot ${f.kind} ${f.level}`, html: FEAT_ICO[f.kind], iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false, zIndexOffset: 700 })
       .bindTooltip(`<b>${esc(featHead(f))}</b> · ${featTimes(f)}<br><small>${esc(f.advice)}</small>`, { direction: 'top', offset: [0, -9], className: 'r-feat-tip' })
+      .on('tooltipopen', flipTip)
       .on('click', openSheet).addTo(layer);
   }
   const g = result.gap;
