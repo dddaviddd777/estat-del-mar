@@ -243,8 +243,17 @@ function initMap() {
   const sstEl = new Sst({ position: 'topleft' }).addTo(map).getContainer();
   sstEl.parentNode.prepend(sstEl);
   // Les etiquetes surten cap a la dreta (mar): deixem-hi lloc perquè les de més a l'est no quedin tallades.
-  const fitCoast = () => map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))),
-    wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [170, 24] });
+  // La vista inicial no s'allunya més que abans d'ampliar la zona del mapa (26/11/2026): fins llavors el límit
+  // (41,45-42,65 N, 2,1-4,35 E) la deixava com a mínim al zoom on aquesta zona omple el mapa.
+  const VIEW0 = L.latLngBounds([[41.45, 2.1], [42.65, 4.35]]);
+  const fitCoast = () => {
+    map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))),
+      wide.matches ? { paddingTopLeft: [40, 30], paddingBottomRight: [190, 30] } : { paddingTopLeft: [24, 24], paddingBottomRight: [170, 24] });
+    if (map.getSize().x > 100) {
+      const z0 = map.getBoundsZoom(VIEW0, true);
+      if (map.getZoom() < z0) map.setZoom(z0, { animate: false });
+    }
+  };
   // No es pot allunyar més enllà de la zona de les capes (l'usuari, 25/11/2026: amb el zoom molt allunyat el vent no
   // cobria el mapa i les etiquetes quedaven mal posades). El zoom mínim depèn de la mida del mapa.
   const gridB = L.latLngBounds(GRID_BOUNDS);

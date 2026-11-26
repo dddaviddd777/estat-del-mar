@@ -8,12 +8,14 @@ import { TZ, windName } from './marine.js';
 import { loadCoast, coastInfo, inCoastArea, coastReady } from './coast.js';
 
 // ---------- Graella ----------
-// De Barcelona al golf del Lleó, de Girona fins a ~100 km mar endins: 19 × 13 punts, cada 10-11 km (els models d'onades tenen
-// cel·les d'uns 8 km). És més ampla que alta perquè la costa sencera hi càpiga també a les pantalles apaïsades:
-// el mapa no deixa allunyar-se més enllà d'aquesta zona (GRID_BOUNDS), i així les capes la cobreixen sempre tota.
-const G = { lat0: 41.45, dLat: 0.1, ny: 13, lon0: 2.1, dLon: 0.125, nx: 19 };
+// Del Garraf a Leucate, de la Plana de Vic fins a ~100 km mar endins: 16 × 17 punts, cada 12-14 km (els models d'onades
+// tenen cel·les d'uns 8 km). El mapa no deixa sortir d'aquesta zona (GRID_BOUNDS), i així les capes la cobreixen sempre tota.
+// L'usuari, 26/11/2026: al mòbil, amb el zoom inicial, el mapa gairebé no es podia moure amunt i avall (la zona feia de
+// 41,45 a 42,65 N, just el que hi cap). Ara va de 41 a 43 N; perquè la baixada no creixi gaire (Open-Meteo compta cada
+// punt com una crida), els punts són una mica més separats (abans 19 × 13, cada 0,125° × 0,1°).
+const G = { lat0: 41.0, dLat: 0.125, ny: 17, lon0: 2.1, dLon: 0.15, nx: 16 };
 const NP = G.ny * G.nx;
-const GRID_V = 5;
+const GRID_V = 6;
 export const GRID_BOUNDS = [[G.lat0, G.lon0], [G.lat0 + (G.ny - 1) * G.dLat, G.lon0 + (G.nx - 1) * G.dLon]];
 const GRID_KEY = 'mar.grid'; // a part de la resta de dades (fa uns quants centenars de kB)
 const TTL = 60 * 60 * 1000;
@@ -168,7 +170,7 @@ const CELL = 4; // px: resolució del color i de la màscara de terra
  * (`coastInfo`); la resta s'omple des de les caselles conegudes (mar amb mar, terra amb terra). Fora de la zona de
  * la costa, la graella.
  */
-function seaMask(cw, ch, cell = CELL) {
+function seaMask(cw, ch, cell = CELL, ox = 0, oy = 0) {
   const n = cw * ch;
   const m = new Int8Array(n), lat = new Float64Array(n), lon = new Float64Array(n);
   const c = map.getCenter();
@@ -178,7 +180,7 @@ function seaMask(cw, ch, cell = CELL) {
   const queue = [];
   for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
     const k = y * cw + x;
-    const ll = map.containerPointToLatLng([x * cell + cell / 2, y * cell + cell / 2]);
+    const ll = map.containerPointToLatLng([ox + x * cell + cell / 2, oy + y * cell + cell / 2]);
     lat[k] = ll.lat; lon[k] = ll.lng;
     if (!coastOk || !inCoastArea(ll.lat, ll.lng)) { m[k] = 2; continue; } // fora: es decideix amb la graella
     const ci = coastInfo(ll.lat, ll.lng, r);
@@ -195,24 +197,29 @@ function seaMask(cw, ch, cell = CELL) {
   return { m, lat, lon, cw, ch };
 }
 
-function placeCanvas(cv) {
+function placeCanvas(cv, pad = 0) {
   const s = map.getSize();
-  L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0, 0]));
+  L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([-pad, -pad]));
   return s;
 }
+// Marge (px) que es pinta fora de la vista a cada costat: en arrossegar el mapa ja hi ha color i partícules
+// (l'usuari, 26/11/2026: "mantenir el moviment de les capes mentre em desplaço pel mapa").
+const padFor = (s, max) => Math.round(Math.min(max, Math.max(s.x, s.y) * 0.4));
 
 /** Capa de colors: onada (només al mar, amb una fletxa de cap on va cada ~70 px), ratxes o pluja (a tot arreu). */
 function drawColor() {
   const kind = on.color;
   const s = map.getSize();
   if (!kind || !frame || s.x < 1 || s.y < 1) { colorCv.hidden = true; return; } // mapa sense mida (pantalla amagada)
-  placeCanvas(colorCv);
+  const pad = padFor(s, 320);
+  placeCanvas(colorCv, pad);
+  const W = s.x + 2 * pad, H = s.y + 2 * pad;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  colorCv.width = Math.round(s.x * dpr); colorCv.height = Math.round(s.y * dpr);
-  colorCv.style.width = `${s.x}px`; colorCv.style.height = `${s.y}px`;
+  colorCv.width = Math.round(W * dpr); colorCv.height = Math.round(H * dpr);
+  colorCv.style.width = `${W}px`; colorCv.style.height = `${H}px`;
   const g = colorCv.getContext('2d');
-  const cw = Math.ceil(s.x / CELL), ch = Math.ceil(s.y / CELL);
-  const M = kind === 'waves' ? seaMask(cw, ch) : null;
+  const cw = Math.ceil(W / CELL), ch = Math.ceil(H / CELL);
+  const M = kind === 'waves' ? seaMask(cw, ch, CELL, -pad, -pad) : null;
   const off = document.createElement('canvas');
   off.width = cw; off.height = ch;
   const og = off.getContext('2d');
@@ -221,7 +228,7 @@ function drawColor() {
   for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
     const k = y * cw + x;
     if (M && M.m[k] !== 1) continue;
-    const ll = M ? { lat: M.lat[k], lng: M.lon[k] } : map.containerPointToLatLng([x * CELL + CELL / 2, y * CELL + CELL / 2]);
+    const ll = M ? { lat: M.lat[k], lng: M.lon[k] } : map.containerPointToLatLng([x * CELL + CELL / 2 - pad, y * CELL + CELL / 2 - pad]);
     const r = colorAt(kind, ll.lat, ll.lng);
     if (!r) continue;
     val[k] = r.v;
@@ -234,9 +241,11 @@ function drawColor() {
   if (kind !== 'waves') return;
   // Fletxes de direcció de l'onada
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const STEP = 72;
+  // Quadrícula lligada al mapa (no a la vista): les fletxes no salten d'un lloc a l'altre en redibuixar.
+  const STEP = 72, o = map.containerPointToLayerPoint([-pad, -pad]);
+  const first = (v) => ((((STEP / 2 - v) % STEP) + STEP) % STEP);
   g.lineCap = 'round'; g.lineJoin = 'round';
-  for (let y = STEP / 2; y < s.y; y += STEP) for (let x = STEP / 2; x < s.x; x += STEP) {
+  for (let y = first(o.y); y < H; y += STEP) for (let x = first(o.x); x < W; x += STEP) {
     const k = Math.floor(y / CELL) * cw + Math.floor(x / CELL);
     if (!(val[k] >= 0)) continue;
     // Que no caigui just a la vora de terra.
@@ -265,17 +274,24 @@ const MOTION = {
   currents: { speed: 0.7, maxAge: 110, stops: CUR_STOPS, rgb: CUR_RGB, x: 'cx', y: 'cy', ok: 'cok', sea: true, over: 'rgba(236,224,255,.95)' },
 };
 
-/** Camp de velocitats a la pantalla (px/fotograma) a partir de la graella, per moure les partícules de pressa. */
+/**
+ * Camp de velocitats (px/fotograma) a partir de la graella, en píxels de capa del mapa, sobre la vista i un marge a cada
+ * costat. Les partícules hi viuen en les mateixes coordenades: mentre s'arrossega el mapa es continuen movent, i quan la
+ * vista surt del camp se'n torna a fer un al voltant de la vista nova.
+ */
 function buildVField(M) {
   const s = map.getSize();
-  const cw = Math.ceil(s.x / VSTEP) + 1, ch = Math.ceil(s.y / VSTEP) + 1;
+  const pad = padFor(s, M.sea ? 360 : 600);
+  const o = map.containerPointToLayerPoint([-pad, -pad]).round();
+  const W = s.x + 2 * pad, H = s.y + 2 * pad;
+  const cw = Math.ceil(W / VSTEP) + 1, ch = Math.ceil(H / VSTEP) + 1;
   const vx = new Float32Array(cw * ch), vy = new Float32Array(cw * ch), sp = new Float32Array(cw * ch), ok = new Uint8Array(cw * ch);
   // Corrents: només al mar (amb una casella de marge, perquè les partícules no es fiquin terra endins).
-  const sea = M.sea ? seaMask(cw, ch, VSTEP) : null;
+  const sea = M.sea ? seaMask(cw, ch, VSTEP, -pad, -pad) : null;
   for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
     const k = y * cw + x;
     if (sea && sea.m[k] !== 1) continue;
-    const ll = map.containerPointToLatLng([x * VSTEP, y * VSTEP]);
+    const ll = map.layerPointToLatLng([o.x + x * VSTEP, o.y + y * VSTEP]);
     const u = bil(frame[M.x], frame[M.ok], ll.lat, ll.lng), v = bil(frame[M.y], frame[M.ok], ll.lat, ll.lng);
     if (u == null || v == null) continue;
     vx[k] = u * M.speed; vy[k] = -v * M.speed; sp[k] = Math.hypot(u, v); ok[k] = 1;
@@ -283,10 +299,10 @@ function buildVField(M) {
   // Llocs on es poden fer néixer partícules (al mar, si són corrents).
   const spots = [];
   for (let k = 0; k < cw * ch; k++) if (ok[k]) spots.push(k);
-  vfield = { cw, ch, vx, vy, sp, ok, w: s.x, h: s.y, spots };
+  vfield = { cw, ch, vx, vy, sp, ok, ox: o.x, oy: o.y, W, H, spots };
 }
 function vAt(px, py) {
-  const f = vfield, fx = px / VSTEP, fy = py / VSTEP;
+  const f = vfield, fx = (px - f.ox) / VSTEP, fy = (py - f.oy) / VSTEP;
   const i = Math.floor(fx), j = Math.floor(fy);
   if (i < 0 || j < 0 || i >= f.cw - 1 || j >= f.ch - 1) return null;
   const k = j * f.cw + i;
@@ -295,12 +311,19 @@ function vAt(px, py) {
   const L2 = (a) => (a[k] * (1 - tx) + a[k + 1] * tx) * (1 - ty) + (a[k + f.cw] * (1 - tx) + a[k + f.cw + 1] * tx) * ty;
   return [L2(f.vx), L2(f.vy), L2(f.sp)];
 }
+// Vista actual en píxels de capa (canvia mentre s'arrossega el mapa).
+let view = { x: 0, y: 0, w: 0, h: 0 };
+const inView = (p) => p.x >= view.x && p.y >= view.y && p.x < view.x + view.w && p.y < view.y + view.h;
+/** Fa néixer una partícula en un lloc vàlid del camp, a ser possible dins la vista. */
 function spawn(p, maxAge) {
   const f = vfield;
-  if (f.spots.length) {
-    const k = f.spots[Math.floor(Math.random() * f.spots.length)];
-    p.x = ((k % f.cw) + Math.random()) * VSTEP; p.y = (Math.floor(k / f.cw) + Math.random()) * VSTEP;
-  } else { p.x = Math.random() * f.w; p.y = Math.random() * f.h; }
+  for (let t = 0; t < 8; t++) {
+    if (f.spots.length) {
+      const k = f.spots[Math.floor(Math.random() * f.spots.length)];
+      p.x = f.ox + ((k % f.cw) + Math.random()) * VSTEP; p.y = f.oy + (Math.floor(k / f.cw) + Math.random()) * VSTEP;
+    } else { p.x = view.x + Math.random() * view.w; p.y = view.y + Math.random() * view.h; }
+    if (inView(p)) break;
+  }
   p.age = Math.floor(Math.random() * maxAge);
   return p;
 }
@@ -311,34 +334,50 @@ function startMotion() {
   const s = map.getSize();
   if (!kind || !frame || s.x < 1 || s.y < 1) { motionCv.hidden = true; return; }
   const M = MOTION[kind];
-  placeCanvas(motionCv);
   wdpr = Math.min(2, window.devicePixelRatio || 1);
   motionCv.width = Math.round(s.x * wdpr); motionCv.height = Math.round(s.y * wdpr);
   motionCv.style.width = `${s.x}px`; motionCv.style.height = `${s.y}px`;
+  const v0 = map.containerPointToLayerPoint([0, 0]).round();
+  view = { x: v0.x, y: v0.y, w: s.x, h: s.y };
+  L.DomUtil.setPosition(motionCv, v0);
   buildVField(M);
   if (!vfield.spots.length) { motionCv.hidden = true; return; }
+  // Tantes partícules com abans per a la part visible (la proporció de caselles amb dades és la de tot el camp).
   const area = (s.x * s.y * vfield.spots.length) / (vfield.cw * vfield.ch);
   const n = Math.round(Math.min(1400, Math.max(150, area / 420)));
   particles = Array.from({ length: n }, () => spawn({}, M.maxAge));
   motionCv.hidden = false;
   const g = motionCv.getContext('2d');
-  g.setTransform(wdpr, 0, 0, wdpr, 0, 0);
   g.lineCap = 'round';
   const cuts = M.stops.map(([v]) => v), cols = M.stops.map(([, c]) => c);
   const bucketOf = (sp) => { let b = 0; for (let i = 0; i < cuts.length; i++) if (sp >= cuts[i] - (cuts[1] - cuts[0]) / 2) b = i; return b; };
   const paths = cols.map(() => []);
   const step = () => {
+    // El mapa s'ha desplaçat: el llenç torna a cobrir la vista i les cues es mouen amb el mapa.
+    const v = map.containerPointToLayerPoint([0, 0]).round();
+    if (v.x !== view.x || v.y !== view.y) {
+      const dx = view.x - v.x, dy = view.y - v.y;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = 'copy';
+      g.drawImage(motionCv, Math.round(dx * wdpr), Math.round(dy * wdpr));
+      L.DomUtil.setPosition(motionCv, v);
+      view.x = v.x; view.y = v.y;
+      // Si la vista surt del camp de velocitats, se'n fa un de nou al seu voltant.
+      const f = vfield;
+      if (v.x < f.ox || v.y < f.oy || v.x + s.x > f.ox + f.W || v.y + s.y > f.oy + f.H) buildVField(M);
+    }
+    g.setTransform(wdpr, 0, 0, wdpr, -view.x * wdpr, -view.y * wdpr);
     // Esvaeix el que hi havia: deixa una cua darrere de cada partícula.
     g.globalCompositeOperation = 'destination-in';
     g.fillStyle = 'rgba(0,0,0,0.9)';
-    g.fillRect(0, 0, s.x, s.y);
+    g.fillRect(view.x, view.y, s.x, s.y);
     g.globalCompositeOperation = 'source-over';
     for (const a of paths) a.length = 0;
     for (const p of particles) {
-      const v = p.age < M.maxAge ? vAt(p.x, p.y) : null;
-      if (!v) { spawn(p, M.maxAge); p.age = 0; continue; }
-      const nx = p.x + v[0], ny = p.y + v[1];
-      paths[bucketOf(v[2])].push(p.x, p.y, nx, ny);
+      const vv = p.age < M.maxAge && inView(p) ? vAt(p.x, p.y) : null;
+      if (!vv) { spawn(p, M.maxAge); p.age = 0; continue; }
+      const nx = p.x + vv[0], ny = p.y + vv[1];
+      paths[bucketOf(vv[2])].push(p.x, p.y, nx, ny);
       p.x = nx; p.y = ny; p.age++;
     }
     // Sobre una capa de colors, partícules clares (com al Windy); sobre el mapa sol, del color de la força.
@@ -357,7 +396,7 @@ function startMotion() {
 function stopMotion() {
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
-  if (motionCv) motionCv.getContext('2d').clearRect(0, 0, motionCv.width, motionCv.height);
+  if (motionCv) { const g = motionCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, motionCv.width, motionCv.height); }
 }
 
 // ---------- Utilitats de lectura ----------
@@ -499,8 +538,9 @@ export function initLayers(m, c) {
   L.DomEvent.disableClickPropagation(ui.legend);
 
   map.on('zoomstart', () => { colorCv.hidden = true; stopMotion(); motionCv.hidden = true; });
-  map.on('movestart', () => { stopMotion(); });
-  map.on('moveend resize', () => { if (on.color) drawColor(); if (on.motion) startMotion(); });
+  // En arrossegar, les partícules continuen (startMotion segueix la vista); en acabar, es redibuixen els colors.
+  map.on('moveend', () => { if (on.color) drawColor(); if (on.motion && !raf) startMotion(); });
+  map.on('resize', () => { if (on.color) drawColor(); if (on.motion) startMotion(); });
   ui.cross = L.DomUtil.create('div', 'ctr-cross', map.getContainer());
   ui.cross.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><g stroke-linecap="round"><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#fff" stroke-width="4.5"/><path d="M16 3v8M16 21v8M3 16h8M21 16h8" stroke="#0b1d2c" stroke-width="2.2"/></g><circle cx="16" cy="16" r="2.6" fill="#0b1d2c" stroke="#fff" stroke-width="1.4"/></svg>';
   ui.ctr = L.DomUtil.create('button', 'ctr-read', map.getContainer());
