@@ -257,3 +257,4 @@
 {"boia":"begur","t":1795838400,"hs":1.29,"dir":2,"tp":5.9,"sst":16.4,"m":{"main":0.76,"ecmwf":1.04,"gfs":1.1,"dwd":1},"msst":16.2,"m24":{"main":0.84,"ecmwf":0.98,"gfs":1.02,"dwd":0.92}}
 {"boia":"begur","t":1795842000,"hs":1.17,"dir":6,"tp":5.5,"sst":16.4,"m":{"main":0.74,"ecmwf":0.98,"gfs":1.04,"dwd":1.02},"msst":16.2,"m24":null}
 {"boia":"begur","t":1795849200,"hs":1.05,"dir":14,"tp":5.3,"sst":16.4,"m":{"main":0.72,"ecmwf":0.9,"gfs":0.98,"dwd":1.02},"msst":16.2,"m24":null}
+{"boia":"begur","t":1795856400,"hs":0.94,"dir":17,"tp":5.5,"sst":16.5,"m":{"main":0.7,"ecmwf":0.88,"gfs":1,"dwd":0.98},"msst":16.2,"m24":null}
